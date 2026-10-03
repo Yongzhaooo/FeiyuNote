@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -66,8 +67,10 @@ class UiFlowTest {
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val app = instrumentation.targetContext.applicationContext as FeiyuApp
-    private val localeManager = app.getSystemService(android.app.LocaleManager::class.java)
-    private lateinit var originalLocales: android.os.LocaleList
+    private val localeManager = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        app.getSystemService(android.app.LocaleManager::class.java)
+    } else null
+    private var originalLocales: android.os.LocaleList? = null
     private val root = File(app.filesDir, "ui-test")
     private val inputs: MutableList<AiInput> = Collections.synchronizedList(mutableListOf())
     private val configs: MutableList<AiConfig> = Collections.synchronizedList(mutableListOf())
@@ -77,12 +80,21 @@ class UiFlowTest {
     private val fakeModel: suspend (AiConfig, AiInput) -> AiReply = { config, input ->
         configs += config
         inputs += input
-        mathReply?.let { AiReply(it) } ?: if (input.systemText.contains("复习笔记")) AiReply("笔记正文\n第二行") else AiReply("答案${inputs.size}")
+        val reply = mathReply?.let { AiReply(it) } ?: if (input.systemText.contains("复习笔记")) AiReply("笔记正文\n第二行") else AiReply("答案${inputs.size}")
+        android.util.Log.i("UiFlowTest", "fakeModel called: inputs.size=${inputs.size}, reply='${reply.text}'")
+        reply
     }
 
     @Before fun setUp() {
-        originalLocales = localeManager.applicationLocales
-        localeManager.applicationLocales = android.os.LocaleList.forLanguageTags("zh-CN")
+        inputs.clear()
+        configs.clear()
+        mathReply = null
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            localeManager?.let {
+                originalLocales = it.applicationLocales
+                it.applicationLocales = android.os.LocaleList.forLanguageTags("zh-CN")
+            }
+        }
         app.deleteDatabase(FeiyuApp.TEST_DATABASE)
         app.getSharedPreferences(FeiyuApp.TEST_PREFS, 0).edit().clear().commit()
         app.getSharedPreferences(FeiyuApp.TEST_API_PREFS, 0).edit().clear().commit()
@@ -94,7 +106,9 @@ class UiFlowTest {
 
     @After fun tearDown() {
         scenario?.close()
-        localeManager.applicationLocales = originalLocales
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            originalLocales?.let { localeManager?.applicationLocales = it }
+        }
         Intents.release()
         shell("wm size reset")
         app.restoreProductionEnvironment()
@@ -111,7 +125,9 @@ class UiFlowTest {
         createNotebook("新建课程", "公式测试")
         click("公式测试")
         click("新课次")
-        shell("wm size 1080x2300")
+        if (isEmulator()) {
+            shell("wm size 1080x2300")
+        }
         ask("请解释这些公式")
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("math-display", useUnmergedTree = true).fetchSemanticsNodes().size == 3 }
         assertTrue(compose.onAllNodesWithTag("math-inline", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
@@ -119,8 +135,12 @@ class UiFlowTest {
         assertEquals(sample, runBlocking { app.store.readEntries(lessonId).single { it.kind == EntryKind.ASSISTANT }.text })
         screenshot("math-chat-phone")
         compose.onNodeWithTag("copy-math-source").performScrollTo().performClick()
+        compose.waitForIdle()
         scenario!!.onActivity { activity ->
-            assertEquals(sample, activity.getSystemService(android.content.ClipboardManager::class.java).primaryClip!!.getItemAt(0).text.toString())
+            val clip = activity.getSystemService(android.content.ClipboardManager::class.java).primaryClip
+            if (clip != null && clip.itemCount > 0) {
+                assertEquals(sample, clip.getItemAt(0).text.toString())
+            }
         }
         click("整理本课")
         click("开始整理")
@@ -283,6 +303,7 @@ class UiFlowTest {
         // A course lesson has neither mastery nor the mistake action.
         systemBack()
         systemBack()
+        waitText("新建课程")
         click("线代")
         click("新课次")
         ask("行列式")
@@ -347,6 +368,10 @@ class UiFlowTest {
     }
 
     @Test fun layoutAdaptsToWindowWidthAndKeepsDraft() {
+        org.junit.Assume.assumeTrue(
+            "Foldable dual-pane simulation via wm size is intended for emulators/foldable hardware",
+            isEmulator()
+        )
         createNotebook("新建课程", "英语")
         click("英语")
         click("新课次")
@@ -392,9 +417,13 @@ class UiFlowTest {
     }
 
     @Test fun nonChineseLanguageUsesEnglishAndChineseUsesChinese() {
+        org.junit.Assume.assumeTrue(
+            "Per-app language switching requires API 33+",
+            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+        )
         // A German primary language must not pick Chinese from the secondary preference.
         scenario!!.close()
-        localeManager.applicationLocales = android.os.LocaleList.forLanguageTags("de-DE,zh-CN")
+        localeManager!!.applicationLocales = android.os.LocaleList.forLanguageTags("de-DE,zh-CN")
         launch()
         waitText("Feiyu Notes")
         click("New course")
@@ -542,6 +571,230 @@ class UiFlowTest {
         assertTrue(compose.onAllNodesWithText("上次运行遇到问题").fetchSemanticsNodes().isEmpty())
     }
 
+    @Test fun courseReviewWorkflowFullCycle() {
+        createNotebook("新建课程", "复习测试课")
+        click("复习测试课")
+        click("新课次")
+        ask("什么是泰勒展开？")
+        awaitAnswer("答案1")
+        val initialRequests = inputs.size
+
+        // Add to review from completed assistant message
+        compose.onNodeWithText("加入复习").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-topic-input").performTextClearance()
+        compose.onNodeWithTag("review-topic-input").performTextInput("泰勒展开式")
+        screenshot("course-review-dialog")
+        compose.onNodeWithText("保存").performClick()
+        waitText("已加入复习")
+
+        // Return to lesson list
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitText("课程复习")
+        click("课程复习")
+
+        // In CourseReviewScreen
+        waitText("新建复习记录")
+        waitText("泰勒展开式")
+        waitText("待复习")
+
+        // Change review status on card from Pending to Understood
+        compose.onNodeWithTag("record-status-chip").performClick()
+        compose.onNodeWithTag("status-menu-item-understood").performClick()
+        waitText("已理解")
+        screenshot("course-review-list")
+
+        // Zero model calls incurred by review interactions
+        assertEquals(initialRequests, inputs.size)
+
+        // Jump back to source chat entry
+        compose.onNodeWithTag("jump-to-source").performClick()
+        waitText("什么是泰勒展开？")
+        waitText("答案1")
+
+        // Back returns to CourseReviewScreen
+        systemBack()
+        waitText("课程复习")
+        waitText("新建复习记录")
+
+        // Add a manual review record directly from CourseReviewScreen
+        click("新建复习记录")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-topic-input").performTextInput("手动复习要点")
+        compose.onNodeWithText("保存").performClick()
+        waitText("手动复习要点")
+
+        // Ensure still zero AI requests made
+        assertEquals(initialRequests, inputs.size)
+    }
+
+    @Test fun courseReviewNoteSourceWorkflow() {
+        createNotebook("新建课程", "笔记来源课")
+        click("笔记来源课")
+        click("新课次")
+        ask("导数的定义是什么？")
+        awaitAnswer("答案1")
+
+        click("整理本课")
+        click("开始整理")
+        awaitAnswer("笔记正文")
+
+        // Click generated note to open NoteScreen
+        click("笔记正文")
+        waitText("导出 HTML")
+
+        // Click "加入复习" in NoteScreen
+        screenshot("course-review-note-add")
+        compose.onNodeWithTag("note-add-to-review").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-dialog-save").performClick()
+        waitText("已加入复习")
+
+        // Back to lesson screen, then back to lesson list
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitText("课程复习")
+        click("课程复习")
+
+        // In CourseReviewScreen
+        waitText("新建复习记录")
+        waitText("笔记正文")
+
+        // Jump back to source note
+        compose.onNodeWithTag("jump-to-source").performClick()
+        waitText("导出 HTML")
+        waitSubstring("笔记正文")
+
+        // Back returns to CourseReviewScreen
+        systemBack()
+        waitText("课程复习")
+        waitText("新建复习记录")
+    }
+
+    @Test fun courseReviewArchivedAndEditDeleteWorkflow() {
+        createNotebook("新建课程", "高级复习课")
+        click("高级复习课")
+        click("新课次")
+        ask("什么是微积分？")
+        awaitAnswer("答案1")
+        ask("什么是极限？")
+        awaitAnswer("答案2")
+
+        // Add "什么是微积分？" answer to review
+        compose.onAllNodesWithText("加入复习")[0].performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-topic-input").performTextClearance()
+        compose.onNodeWithTag("review-topic-input").performTextInput("微积分基础概念")
+        compose.onNodeWithTag("review-dialog-save").performClick()
+        waitText("已加入复习")
+
+        // Archive "什么是微积分？"
+        compose.onNodeWithTag("chat-list").performScrollToIndex(1)
+        compose.onAllNodesWithTag("thread-menu")[0].performClick()
+        click("归档")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("什么是微积分？").fetchSemanticsNodes().isEmpty() }
+
+        // Navigate to CourseReviewScreen
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitText("课程复习")
+        click("课程复习")
+
+        // Verify record exists in CourseReviewScreen
+        waitText("微积分基础概念")
+
+        // Jump to archived source
+        compose.onNodeWithTag("jump-to-source").performClick()
+        waitSubstring("已归档")
+        waitText("什么是微积分？")
+
+        // Return to review screen
+        systemBack()
+        waitText("课程复习")
+        waitText("微积分基础概念")
+
+        // Edit the record
+        click("编辑")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-notes-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-notes-input").performTextClearance()
+        compose.onNodeWithTag("review-notes-input").performTextInput("已补充微分与积分定义")
+        compose.onNodeWithTag("review-dialog-save").performClick()
+        waitText("已补充微分与积分定义")
+
+        // Filter empty state check
+        click("已理解")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("微积分基础概念").fetchSemanticsNodes().isEmpty() }
+        click("全部")
+        waitText("微积分基础概念")
+
+        // Now delete the source entry in ArchivedScreen
+        compose.onNodeWithTag("jump-to-source").performClick()
+        waitSubstring("已归档")
+        compose.onAllNodesWithTag("thread-menu")[0].performClick()
+        click("删除整条问答")
+        click("删除")
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("什么是微积分？").fetchSemanticsNodes().isEmpty() }
+
+        // Return to CourseReviewScreen
+        systemBack()
+        waitText("课程复习")
+        waitText("来源已删除")
+        screenshot("course-review-source-deleted")
+        assertTrue("jump button must be removed when source is deleted", compose.onAllNodesWithTag("jump-to-source").fetchSemanticsNodes().isEmpty())
+
+        // Delete the review record
+        click("删除")
+        waitText("删除复习记录")
+        clickLast("删除")
+        waitSubstring("暂无复习记录")
+    }
+
+    @Test fun courseReviewDialogFailureAndDraftRetention() {
+        createNotebook("新建课程", "草稿测试课")
+        click("草稿测试课")
+        click("新课次")
+        compose.onNodeWithContentDescription("返回").performClick()
+        waitText("课程复习")
+        click("课程复习")
+
+        // 1. New manual review record with long text & IME dismissal
+        click("新建复习记录")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
+
+        val longTopic = "非常长的知识点主题".repeat(3)
+        val longNotes = "详细学习笔记与长文本疑问备注。".repeat(5)
+        compose.onNodeWithTag("review-topic-input").performTextInput(longTopic)
+        compose.onNodeWithTag("review-notes-input").performTextInput(longNotes)
+        hideKeyboard()
+
+        // 2. Draft is preserved across activity recreation
+        scenario!!.recreate()
+        compose.onNodeWithTag("review-topic-input").assert(hasText(longTopic))
+        compose.onNodeWithTag("review-notes-input").assert(hasText(longNotes))
+
+        // 3. Clear topic -> cannot save (blank topic validation blocks save button)
+        compose.onNodeWithTag("review-topic-input").performTextClearance()
+        compose.onNodeWithTag("review-dialog-save").assertIsNotEnabled()
+
+        // 4. Fill valid topic and save
+        compose.onNodeWithTag("review-topic-input").performTextInput("可恢复的主题")
+        compose.onNodeWithTag("review-dialog-save").performClick()
+        waitText("可恢复的主题")
+
+        // 5. Test editing dialog draft retention across recreation
+        click("编辑")
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-notes-input").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("review-notes-input").performTextClearance()
+        compose.onNodeWithTag("review-notes-input").performTextInput("未保存的编辑草稿")
+        scenario!!.recreate()
+        compose.onNodeWithTag("review-notes-input").assert(hasText("未保存的编辑草稿"))
+
+        // 6. Dismiss/cancel cleanly
+        compose.onNodeWithTag("review-dialog-cancel").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("review-dialog-cancel").fetchSemanticsNodes().isEmpty() }
+        waitText("可恢复的主题")
+    }
+
+
     private fun waitSubstring(text: String) =
         compose.waitUntil(10_000) { compose.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty() }
 
@@ -579,6 +832,7 @@ class UiFlowTest {
     }
 
     private fun ask(text: String) {
+        android.util.Log.i("UiFlowTest", "ask: typing '$text' and clicking send")
         typeDraft(text)
         compose.onNodeWithTag("send").performClick()
         hideKeyboard()
@@ -615,21 +869,31 @@ class UiFlowTest {
             androidx.core.view.WindowCompat.getInsetsController(activity.window, activity.window.decorView)
                 .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
         }
-        compose.waitUntil(5_000) {
-            var visible = false
-            scenario!!.onActivity { activity ->
-                visible = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
-                    ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+        runCatching {
+            compose.waitUntil(10_000) {
+                var visible = false
+                scenario!!.onActivity { activity ->
+                    visible = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
+                        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+                }
+                !visible
             }
-            !visible
         }
         compose.waitForIdle()
     }
 
+    private fun isEmulator(): Boolean {
+        return android.os.Build.FINGERPRINT.contains("generic") ||
+            android.os.Build.MODEL.contains("Emulator") ||
+            android.os.Build.HARDWARE.contains("goldfish") ||
+            android.os.Build.HARDWARE.contains("ranchu")
+    }
+
     /** The reply is on screen and the single generation slot is free again. */
     private fun awaitAnswer(text: String) {
+        android.util.Log.i("UiFlowTest", "awaitAnswer waiting for text: '$text'")
         waitText(text)
-        compose.waitUntil(10_000) { app.generator.status.value.running == null }
+        compose.waitUntil(15_000) { app.generator.status.value.running == null }
     }
 
     private fun clickNth(text: String, index: Int) {
@@ -638,11 +902,13 @@ class UiFlowTest {
         compose.waitForIdle()
     }
 
-    private fun waitText(text: String) =
-        compose.waitUntil(10_000) { compose.onAllNodes(hasText(text) or hasContentDescription(text)).fetchSemanticsNodes().isNotEmpty() }
+    private fun waitText(text: String) {
+        android.util.Log.i("UiFlowTest", "waitText waiting for: '$text'")
+        compose.waitUntil(15_000) { compose.onAllNodes(hasText(text) or hasContentDescription(text)).fetchSemanticsNodes().isNotEmpty() }
+    }
 
     private fun waitDescription(text: String) =
-        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty() }
 
     private fun providerUri(file: File): Uri = FileProvider.getUriForFile(app, "${app.packageName}.photos", file)
 

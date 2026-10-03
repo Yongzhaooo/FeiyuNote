@@ -75,6 +75,22 @@ class NotebookDatabase(private val context: Context, name: String? = NAME) :
         db.execSQL("CREATE INDEX idx_lessons_notebook ON lessons(notebook_id)")
         db.execSQL("CREATE INDEX idx_entries_lesson ON entries(lesson_id)")
         db.execSQL("CREATE INDEX idx_entries_parent ON entries(parent_entry_id)")
+        db.execSQL(
+            """
+            CREATE TABLE review_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                notebook_id INTEGER NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+                topic TEXT NOT NULL,
+                notes TEXT NOT NULL,
+                source_entry_id INTEGER,
+                source_deleted INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL CHECK (status IN ('pending', 'understood', 'confused')),
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            """
+        )
+        db.execSQL("CREATE INDEX idx_review_records_notebook ON review_records(notebook_id)")
         seedGuidedTemplate(db)
     }
 
@@ -99,10 +115,28 @@ class NotebookDatabase(private val context: Context, name: String? = NAME) :
             db.execSQL("ALTER TABLE templates ADD COLUMN source TEXT")
             seedGuidedTemplate(db)
         }
+        if (oldVersion < 4) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS review_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    notebook_id INTEGER NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+                    topic TEXT NOT NULL,
+                    notes TEXT NOT NULL,
+                    source_entry_id INTEGER,
+                    source_deleted INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL CHECK (status IN ('pending', 'understood', 'confused')),
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )
+                """
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_review_records_notebook ON review_records(notebook_id)")
+        }
     }
 
     companion object {
         const val NAME = "notes.db"
-        const val VERSION = 3
+        const val VERSION = 4
     }
 }

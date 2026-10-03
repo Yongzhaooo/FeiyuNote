@@ -235,6 +235,25 @@ class StudyViewModel(
 
     fun cancel() = generator.cancel()
 
+    suspend fun addToReview(sourceEntryId: Long?, topic: String, notes: String): String? {
+        val result = store.insertReviewRecord(
+            notebookId = notebookId,
+            topic = topic,
+            notes = notes,
+            sourceEntryId = sourceEntryId,
+        )
+        return when (result) {
+            is com.feiyu.notes.data.ReviewInsertResult.Success -> {
+                _notice.value = context.getString(R.string.added_to_review)
+                null
+            }
+            is com.feiyu.notes.data.ReviewInsertResult.AlreadyExists -> context.getString(R.string.already_in_review)
+            is com.feiyu.notes.data.ReviewInsertResult.SourceNotFound -> context.getString(R.string.source_not_found)
+            is com.feiyu.notes.data.ReviewInsertResult.InvalidCourse -> context.getString(R.string.save_failed)
+            is com.feiyu.notes.data.ReviewInsertResult.Failed -> context.getString(R.string.save_failed)
+        }
+    }
+
     // ---- threads ----
 
     fun setMastery(rootId: Long, mastery: Mastery) = viewModelScope.launch { store.setMastery(rootId, mastery) }

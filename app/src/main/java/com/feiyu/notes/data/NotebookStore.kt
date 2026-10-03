@@ -112,6 +112,14 @@ class NotebookStore(
         val notebookId = getLesson(id)?.notebookId ?: return false
         var images = emptyList<String>()
         val deleted = write {
+            val now = clock()
+            db.execSQL(
+                """
+                UPDATE review_records SET source_deleted = 1, updated_at = ?
+                WHERE source_entry_id IN (SELECT id FROM entries WHERE lesson_id = ?)
+                """,
+                arrayOf<Any>(now, id)
+            )
             images = query("SELECT image_paths FROM entries WHERE lesson_id = ?", id) { Json.decodeFromString<List<String>>(it.getString(0)) }.flatten()
             db.delete("lessons", "id = ?", args(id)) == 1
         }
@@ -203,6 +211,11 @@ class NotebookStore(
     }
 
     suspend fun deleteNote(noteId: Long): Boolean = write {
+        val now = clock()
+        db.execSQL(
+            "UPDATE review_records SET source_deleted = 1, updated_at = ? WHERE source_entry_id = ? AND source_deleted = 0",
+            arrayOf<Any>(now, noteId)
+        )
         db.delete("entries", "id = ? AND kind = 'note'", args(noteId)) == 1
     }
 
@@ -263,6 +276,15 @@ class NotebookStore(
                 """,
                 rootId,
             ) { Json.decodeFromString<List<String>>(it.getString(0)) }.flatten()
+            val now = clock()
+            db.execSQL(
+                """
+                WITH RECURSIVE t(id) AS (SELECT ? UNION ALL SELECT e.id FROM entries e JOIN t ON e.parent_entry_id = t.id)
+                UPDATE review_records SET source_deleted = 1, updated_at = ?
+                WHERE source_entry_id IN (SELECT id FROM t)
+                """,
+                arrayOf<Any>(rootId, now)
+            )
             db.delete("entries", "id = ?", args(rootId)) == 1
         }
         if (deleted) withContext(io) { photos.deletePhotos(notebookId, images) }
@@ -308,7 +330,161 @@ class NotebookStore(
         db.delete("templates", "id = ?", args(id)) == 1
     }
 
+    // ---- review records (spec §12 / course review) ----
+
+    // ---- review records ----
+
+    suspend fun listReviewRecords(notebookId: Long): List<ReviewRecord> = read {
+        if (!isCourseNotebook(notebookId)) return@read emptyList()
+        query("SELECT * FROM review_records WHERE notebook_id = ? ORDER BY created_at DESC, id DESC", notebookId) {
+            it.toReviewRecord()
+        }
+    }
+
+    suspend fun getReviewRecord(notebookId: Long, recordId: Long): ReviewRecord? = read {
+        if (!isCourseNotebook(notebookId)) return@read null
+        query("SELECT * FROM review_records WHERE id = ? AND notebook_id = ?", recordId, notebookId) {
+            it.toReviewRecord()
+        }.firstOrNull()
+    }
+
+    suspend fun findReviewRecordBySource(notebookId: Long, sourceEntryId: Long): ReviewRecord? = read {
+        if (!isCourseNotebook(notebookId)) return@read null
+        query(
+            "SELECT * FROM review_records WHERE notebook_id = ? AND source_entry_id = ? AND source_deleted = 0 LIMIT 1",
+            notebookId, sourceEntryId
+        ) { it.toReviewRecord() }.firstOrNull()
+    }
+
+    suspend fun insertReviewRecord(
+        notebookId: Long,
+        topic: String,
+        notes: String,
+        sourceEntryId: Long? = null,
+        status: ReviewStatus = ReviewStatus.PENDING,
+    ): ReviewInsertResult = write {
+        if (!isCourseNotebook(notebookId)) return@write ReviewInsertResult.InvalidCourse
+        if (topic.isBlank()) return@write ReviewInsertResult.Failed
+
+        if (sourceEntryId != null) {
+            val sourceEntry = query(
+                """
+                SELECT e.kind, e.state, l.notebook_id FROM entries e JOIN lessons l ON e.lesson_id = l.id
+                WHERE e.id = ?
+                """,
+                sourceEntryId
+            ) { Triple(it.getString(0), it.getString(1), it.getLong(2)) }.firstOrNull()
+            if (sourceEntry == null || sourceEntry.third != notebookId) {
+                return@write ReviewInsertResult.SourceNotFound
+            }
+            val (kindStr, stateStr, _) = sourceEntry
+            val isValidSource = when (kindStr?.lowercase()) {
+                EntryKind.NOTE.db, EntryKind.USER.db -> true
+                EntryKind.ASSISTANT.db -> stateStr?.lowercase() == EntryState.COMPLETE.db
+                else -> false
+            }
+            if (!isValidSource) {
+                return@write ReviewInsertResult.SourceNotFound
+            }
+
+            val existing = query(
+                "SELECT * FROM review_records WHERE notebook_id = ? AND source_entry_id = ? AND source_deleted = 0",
+                notebookId, sourceEntryId
+            ) { it.toReviewRecord() }.firstOrNull()
+            if (existing != null) {
+                return@write ReviewInsertResult.AlreadyExists(existing)
+            }
+        }
+
+        val now = clock()
+        val values = ContentValues().apply {
+            put("notebook_id", notebookId)
+            put("topic", topic.trim())
+            put("notes", notes.trim())
+            put("source_entry_id", sourceEntryId)
+            put("source_deleted", 0)
+            put("status", status.db)
+            put("created_at", now)
+            put("updated_at", now)
+        }
+        val id = db.insert("review_records", null, values)
+        if (id == -1L) return@write ReviewInsertResult.Failed
+
+        val record = query("SELECT * FROM review_records WHERE id = ? AND notebook_id = ?", id, notebookId) {
+            it.toReviewRecord()
+        }.firstOrNull() ?: return@write ReviewInsertResult.Failed
+
+        ReviewInsertResult.Success(record)
+    }
+
+    suspend fun addReviewRecord(
+        notebookId: Long,
+        topic: String,
+        notes: String,
+        sourceEntryId: Long? = null,
+        status: ReviewStatus = ReviewStatus.PENDING,
+    ): ReviewRecord? = when (val res = insertReviewRecord(notebookId, topic, notes, sourceEntryId, status)) {
+        is ReviewInsertResult.Success -> res.record
+        is ReviewInsertResult.AlreadyExists -> res.existingRecord
+        else -> null
+    }
+
+    suspend fun updateReviewRecord(
+        notebookId: Long,
+        recordId: Long,
+        topic: String,
+        notes: String,
+        status: ReviewStatus? = null,
+    ): Boolean = write {
+        if (!isCourseNotebook(notebookId)) return@write false
+        if (topic.isBlank()) return@write false
+        val now = clock()
+        val values = ContentValues().apply {
+            put("topic", topic.trim())
+            put("notes", notes.trim())
+            if (status != null) put("status", status.db)
+            put("updated_at", now)
+        }
+        db.update("review_records", values, "id = ? AND notebook_id = ?", args(recordId, notebookId)) == 1
+    }
+
+    suspend fun setReviewStatus(
+        notebookId: Long,
+        recordId: Long,
+        status: ReviewStatus,
+    ): Boolean = write {
+        if (!isCourseNotebook(notebookId)) return@write false
+        val now = clock()
+        val values = ContentValues().apply {
+            put("status", status.db)
+            put("updated_at", now)
+        }
+        db.update("review_records", values, "id = ? AND notebook_id = ?", args(recordId, notebookId)) == 1
+    }
+
+    suspend fun deleteReviewRecord(notebookId: Long, recordId: Long): Boolean = write {
+        if (!isCourseNotebook(notebookId)) return@write false
+        db.delete("review_records", "id = ? AND notebook_id = ?", args(recordId, notebookId)) == 1
+    }
+
+    suspend fun isThreadArchived(entryId: Long): Boolean = read {
+        query(
+            """
+            WITH RECURSIVE t(id, parent_entry_id, archived) AS (
+                SELECT id, parent_entry_id, archived FROM entries WHERE id = ?
+                UNION ALL
+                SELECT e.id, e.parent_entry_id, e.archived FROM entries e JOIN t ON e.id = t.parent_entry_id
+            )
+            SELECT archived FROM t WHERE parent_entry_id IS NULL LIMIT 1
+            """,
+            entryId
+        ) { it.getLong(0) == 1L }.firstOrNull() ?: false
+    }
+
     // ---- helpers ----
+
+    private fun SQLiteDatabase.isCourseNotebook(notebookId: Long): Boolean =
+        notebookId != GENERAL_ID && count("SELECT COUNT(*) FROM notebooks WHERE id = ? AND kind = 'course'", notebookId) == 1L
 
     private fun SQLiteDatabase.validLink(kind: NotebookKind, linkedCourseId: Long?, selfId: Long?): Boolean {
         if (linkedCourseId == null) return true
@@ -406,6 +582,18 @@ class NotebookStore(
         archived = long("archived") == 1L,
         mastery = enumOf<Mastery>(str("mastery")),
         createdAt = long("created_at")!!,
+    )
+
+    private fun Cursor.toReviewRecord() = ReviewRecord(
+        id = long("id")!!,
+        notebookId = long("notebook_id")!!,
+        topic = str("topic")!!,
+        notes = str("notes")!!,
+        sourceEntryId = long("source_entry_id"),
+        sourceDeleted = long("source_deleted") == 1L,
+        status = ReviewStatus.fromDb(str("status") ?: "pending"),
+        createdAt = long("created_at")!!,
+        updatedAt = long("updated_at")!!,
     )
 }
 
