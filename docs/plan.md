@@ -280,4 +280,8 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 - 用户在 TB321FU 上试用覆盖安装的预览包后确认发布。
 - README 新增界面预览：五张截图由新增的 `UiFlowTest.showcaseScreenshots` 在 1080x2300 模拟器上生成（仅 `-e showcase true` 时运行，平时跳过），缩到 540 宽后放在 `docs/screenshots/0.4/`。截图内容为模拟回答生成的演示数据。README 待做新增：贴纸未打标签导致随机性过强；考虑允许自定义鱼鱼头像。
 - 本地验证：`scripts/ci.ps1 -Full` 通过，设备 runner 58 项（56 通过、2 跳过：展示截图和默认关闭的真实 API 冒烟，0 失败），6 个测试类；JVM 单测 77 项通过。
+- 发布：`e3fe0cc` 已推送到 main（pre-push 完整 CI 再次通过，58 项同上），标签 `v0.4.0` 指向该提交。[main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/37532849477) 与 [tag 构建及签名发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/37533363475) 均通过，[GitHub 预览版](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.4.0) 已发布。
+- Release 产物 `build/release-v0.4.0/feiyu-notes-v0.4.0.apk` 验签通过：0.4.0 / 9、minSdk 26、debuggable=false，证书 `10caccf5…d88b` 与以往版本一致，SHA-256 `4a5d03e31c35698d6e2711df5fa9253364bd982bacd75cdda16c7cf5dbeed7e1`。
+- 同一 APK 用 `scripts/publish-download.ps1` 发布到 `yz_vps:/srv/feiyunote`。线上下载页显示 0.4.0 和交流群；APK 为 HTTP 200、MIME 正确，下载后 SHA-256 与 Release 一致；[更新索引](https://feiyunote.cangming.fyi/updates/android.json) 为 0.4.0 / 9、minSdk 26，Cache-Control 为 no-cache。
+- TB321FU 已覆盖安装 Release 产物，版本 0.4.0 / 9，首次安装时间不变。
 - 未执行：真实 DeepSeek 请求、真实折叠态、深色模式下的下载页检查。

@@ -2,7 +2,7 @@
 
 **Project outcome:** 面向可拍照的移动设备提供随手记录方案；在安卓手机、平板或折叠屏上按课程、课次拍照或选图提问，获得 DeepSeek 讲解并整理成本地笔记，刷题本记录错题与掌握状态。[1.0 目标](plan.md#10-稳定开发目标)是现有 Android 应用的稳定开发；[2.0 长期目标](plan.md#20-ios-长期目标)为 iOS 支持，尚未启动。[spec](spec.md) 定义产品规则，[plan](plan.md) 保存实现边界与验证证据。
 
-**Current answer:** 2026-10-06，0.4.0 发布中：设置拆分、鲸鱼娘界面、聊天/学习开关、提示词随语言切换和公共聊天“鱼鱼”人设已合入 main，本地完整 CI 通过，用户已在 TB321FU 上试用确认。发布与验证证据见 [plan](plan.md#040-发布)。真实 DeepSeek 下的鱼鱼语气、真实折叠态仍待验证。
+**Current answer:** 2026-10-06，[0.4.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.4.0) 已发布：设置拆分、鲸鱼娘界面、聊天/学习开关、提示词随语言切换和公共聊天“鱼鱼”人设。GitHub 预览版与独立下载站使用同一签名 APK，更新索引为 0.4.0。发布与验证证据见 [plan](plan.md#040-发布)。真实 DeepSeek 下的鱼鱼语气、真实折叠态仍待验证。
 
 ## Next actions
 
@@ -27,6 +27,7 @@
 
 ## Done (rolling)
 
+- **0.4.0 界面与设置（2026-10-06）** — 设置拆分、鲸鱼娘界面、功能开关、提示词本地化与鱼鱼人设随 [v0.4.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.4.0) 双渠道发布；证据见 [plan](plan.md#040-发布)。
 - **0.3.3 课程复习记录（2026-10-06）** — PR #2 已合并，复习记录、迁移、来源回查与删除标记通过完整本地 CI；双栏返回用例已修正。GitHub 预览版和独立下载站均已发布，更新索引为 0.3.3；证据见 [plan](plan.md#033-课程复习发布验证)。
 - **0.3.1 公共聊天与阅读设置（2026-10-01）** — 公共聊天卡片与可替换插图、预装引导式讲解、高级区（内置提示词编辑、Skill 文字导入）、默认 V4.1 Flash + low/high/max 三档推理强度（默认 low，设置可改、会话可覆盖）、连接测试、问答配对编号、右侧跳转节点、语言/主题/字号与字重修复随 [v0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1) 发布；验证见 [plan](plan.md#执行记录)。
 - **0.3 多图附件（2026-10-01）** — 多选、追加拍照、移除、旧库迁移与双语版本记录已随 [v0.3.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.0) 发布；本地/远端 CI 和实际 APK 验证见 [plan](plan.md#执行记录)。
