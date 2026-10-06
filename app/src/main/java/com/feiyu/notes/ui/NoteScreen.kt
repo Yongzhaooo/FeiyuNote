@@ -69,6 +69,7 @@ fun NoteScreen(
     var message by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var editing by rememberSaveable(noteId) { mutableStateOf(false) }
+    var addingToReview by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(note?.id) { if (text == null) note?.let { text = it.text } }
 
     val notebookName = if (notebook?.id == com.feiyu.notes.data.NotebookStore.GENERAL_ID) context.getString(R.string.general_chat) else notebook?.name.orEmpty()
@@ -142,6 +143,14 @@ fun NoteScreen(
                         }
                     }
                 }) { Text(context.getString(R.string.share)) }
+                if (notebook?.kind == com.feiyu.notes.data.NotebookKind.COURSE && notebookId != com.feiyu.notes.data.NotebookStore.GENERAL_ID) {
+                    OutlinedButton(
+                        onClick = { addingToReview = true },
+                        modifier = Modifier.testTag("note-add-to-review"),
+                    ) {
+                        Text(context.getString(R.string.add_to_review))
+                    }
+                }
                 OutlinedButton(onClick = { confirmDelete = true }) { Text(context.getString(R.string.delete_note)) }
             }
             if (dirty) Text(context.getString(R.string.unsaved_note), style = MaterialTheme.typography.bodySmall)
@@ -166,4 +175,37 @@ fun NoteScreen(
         onConfirm = { scope.launch { if (store.deleteNote(noteId)) onBack() } },
         onDismiss = { confirmDelete = false },
     )
+    val activeNote = note
+    if (addingToReview && activeNote != null) {
+        val (defaultTopic, defaultNotes) = ReviewDefaults.fromNote(
+            noteText = activeNote.text,
+            fallbackTitle = context.getString(R.string.note_number, noteId),
+        )
+
+        ReviewRecordEditDialog(
+            title = context.getString(R.string.add_to_review),
+            initialTopic = defaultTopic,
+            initialNotes = defaultNotes,
+            sourceEntryId = noteId,
+            onSave = { topic, notes ->
+                val result = store.insertReviewRecord(
+                    notebookId = notebookId,
+                    topic = topic,
+                    notes = notes,
+                    sourceEntryId = noteId,
+                )
+                when (result) {
+                    is com.feiyu.notes.data.ReviewInsertResult.Success -> {
+                        message = context.getString(R.string.added_to_review)
+                        null
+                    }
+                    is com.feiyu.notes.data.ReviewInsertResult.AlreadyExists -> context.getString(R.string.already_in_review)
+                    is com.feiyu.notes.data.ReviewInsertResult.SourceNotFound -> context.getString(R.string.source_not_found)
+                    is com.feiyu.notes.data.ReviewInsertResult.InvalidCourse -> context.getString(R.string.save_failed)
+                    is com.feiyu.notes.data.ReviewInsertResult.Failed -> context.getString(R.string.save_failed)
+                }
+            },
+            onDismiss = { addingToReview = false },
+        )
+    }
 }

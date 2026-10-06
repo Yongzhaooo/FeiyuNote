@@ -42,6 +42,7 @@ fun LessonListScreen(
     selectedLessonId: Long?,
     onOpen: (Lesson) -> Unit,
     onBack: () -> Unit,
+    onOpenReview: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val notebook by rememberStoreValue(store, notebookId) { getNotebook(notebookId) }
@@ -58,6 +59,11 @@ fun LessonListScreen(
                 title = { Text(notebook?.name ?: "") },
                 navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), onBack) },
                 actions = {
+                    if (!practice && notebookId != com.feiyu.notes.data.NotebookStore.GENERAL_ID && onOpenReview != null) {
+                        TextButton(onClick = onOpenReview) {
+                            Text(context.getString(R.string.course_review))
+                        }
+                    }
                     TextButton(onClick = {
                         scope.launch { store.createLesson(notebookId, LocalDate.now().toString())?.let(onOpen) }
                     }) { Text(context.getString(R.string.new_session, unit)) }

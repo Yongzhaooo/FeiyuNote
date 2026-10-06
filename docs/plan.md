@@ -229,3 +229,15 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 贡献规则见 [CONTRIBUTING](../CONTRIBUTING.md)。PR 事件及只读权限已检查配置，尚无外部 PR 的实际运行记录。CODEOWNERS 只请求评审，未启用分支保护或强制审批门禁。签名备份位于仓库外 `../肥鱼笔记-private/signing/`，不得提交。
 
 未完成的真机、折叠态与环境检查，以及已知显示/附件问题，统一保留在 [Wayfinder](wayfinder.md)。
+
+## 课程复习记录实施边界与验证（试验阶段）
+
+日期：2026-10-02。状态：实施中。产品范围以 [spec §12](spec.md#12-课程复习记录试验) 与 [memory-design §1](memory-design.md#1-课程内复习记录试验当前阶段实施规格) 为准。
+
+### 架构与变更边界
+- 数据库版本：`VERSION` 由 3 增至 4，保留已有的 v1→v2→v3 升级链。
+- 新增 `review_records` 表及索引 `idx_review_records_notebook`。
+- 级联与删除语义：`notebook_id REFERENCES notebooks(id) ON DELETE CASCADE`；删除问答线程或课次时，关联的 `review_records` 显式标记 `source_deleted = 1`，避免可误导的有效跳转。
+- 数据校验：`insertReviewRecord` 强校验 `notebookId` 归属 COURSE 课程，且 `sourceEntryId` 必须属于同一课程，防止跨课污染；对同一来源防重复插入。
+- 界面流：`ChatScreen` 与 `NoteScreen` 提供「加入复习」；`LessonListScreen` 提供「复习记录」入口导航至 `CourseReviewScreen`，支持状态切换、编辑、删除与跳转回来源。
+- 零模型请求：纯本地 SQLite 操作，无模型调用，不修改现有的提示词与请求流。

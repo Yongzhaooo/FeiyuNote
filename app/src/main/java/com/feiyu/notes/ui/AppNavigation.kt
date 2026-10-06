@@ -40,6 +40,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class LessonKey(val notebookId: Long, val lessonId: Long, val focusEntryId: Long? = null) : NavKey
 @Serializable data class NoteKey(val notebookId: Long, val lessonId: Long, val noteId: Long) : NavKey
 @Serializable data class ArchivedKey(val notebookId: Long, val lessonId: Long) : NavKey
+@Serializable data class ReviewListKey(val notebookId: Long) : NavKey
 @Serializable data object SettingsKey : NavKey
 @Serializable data object TemplatesKey : NavKey
 @Serializable data object SupportKey : NavKey
@@ -86,8 +87,26 @@ fun AppNavigation(initial: List<NavKey>) {
                     notebookId = key.notebookId,
                     selectedLessonId = selected,
                     onOpen = { backStack.openDetail(LessonKey(key.notebookId, it.id)) },
+                    onOpenReview = { backStack.openDetail(ReviewListKey(key.notebookId)) },
                     // The list pane's back goes up a level, closing any open detail with it.
                     onBack = { while (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
+                )
+            }
+            entry<ReviewListKey>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
+                CourseReviewScreen(
+                    store = app.store,
+                    notebookId = key.notebookId,
+                    onBack = back,
+                    onNavigateToSource = { destination ->
+                        when (destination) {
+                            is ReviewSourceDestination.Note ->
+                                backStack.add(NoteKey(key.notebookId, destination.lessonId, destination.noteId))
+                            is ReviewSourceDestination.Archived ->
+                                backStack.add(ArchivedKey(key.notebookId, destination.lessonId))
+                            is ReviewSourceDestination.Chat ->
+                                backStack.add(LessonKey(key.notebookId, destination.lessonId, focusEntryId = destination.entryId))
+                        }
+                    },
                 )
             }
             entry<LessonKey>(metadata = ListDetailSceneStrategy.detailPane()) { key ->

@@ -92,7 +92,11 @@ fun ChatScreen(
     val notice by vm.notice.collectAsStateWithLifecycle()
     var summarizing by rememberSaveable { mutableStateOf(false) }
     var retryTemplateFor by rememberSaveable { mutableStateOf<Long?>(null) }
+    var reviewingEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     val d = data
+    val reviewingEntry = remember(d?.entries, reviewingEntryId) {
+        d?.entries?.firstOrNull { it.id == reviewingEntryId }
+    }
     val general = vm.lessonId == com.feiyu.notes.data.NotebookStore.GENERAL_ID
 
     Scaffold(
@@ -161,6 +165,9 @@ fun ChatScreen(
                                     if (user.templateId != null && d.templates.none { it.id == user.templateId }) retryTemplateFor = user.id
                                     else vm.retry(user.id)
                                 },
+                                onAddToReview = if (!practice && vm.notebookId != com.feiyu.notes.data.NotebookStore.GENERAL_ID) {
+                                    { reviewingEntryId = it.id }
+                                } else null,
                             )
                         }
                     }
@@ -195,6 +202,26 @@ fun ChatScreen(
             confirmLabel = context.getString(R.string.retry),
             onConfirm = { vm.retry(userId, replaceTemplate = true, templateId = it) },
             onDismiss = { retryTemplateFor = null },
+        )
+    }
+    reviewingEntry?.let { entry ->
+        val userQuestion = d?.entries?.firstOrNull { it.id == entry.parentEntryId }
+        val (defaultTopic, defaultNotes) = ReviewDefaults.fromAssistantReply(
+            parentQuestionText = userQuestion?.text,
+            replyId = entry.id,
+            replyText = entry.text,
+            fallbackTitle = context.getString(R.string.reply_number, entry.id),
+        )
+
+        ReviewRecordEditDialog(
+            title = context.getString(R.string.add_to_review),
+            initialTopic = defaultTopic,
+            initialNotes = defaultNotes,
+            sourceEntryId = entry.id,
+            onSave = { topic, notes ->
+                vm.addToReview(entry.id, topic, notes)
+            },
+            onDismiss = { reviewingEntryId = null },
         )
     }
 }
@@ -266,6 +293,7 @@ fun EntryCard(
     vm: StudyViewModel,
     readOnly: Boolean,
     onRetry: (Entry) -> Unit,
+    onAddToReview: ((Entry) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
@@ -308,7 +336,7 @@ fun EntryCard(
                 }
             }
             if (isUser) UserMeta(entry, all, templates)
-            if (entry.kind == EntryKind.ASSISTANT && !readOnly) AssistantActions(entry, all, practice, vm, onRetry)
+            if (entry.kind == EntryKind.ASSISTANT && !readOnly) AssistantActions(entry, all, practice, vm, onRetry, onAddToReview)
         }
     }
     if (confirmDelete) ConfirmDialog(
@@ -348,7 +376,14 @@ private fun UserMeta(entry: Entry, all: List<Entry>, templates: List<Template>) 
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AssistantActions(entry: Entry, all: List<Entry>, practice: Boolean, vm: StudyViewModel, onRetry: (Entry) -> Unit) {
+private fun AssistantActions(
+    entry: Entry,
+    all: List<Entry>,
+    practice: Boolean,
+    vm: StudyViewModel,
+    onRetry: (Entry) -> Unit,
+    onAddToReview: ((Entry) -> Unit)? = null,
+) {
     val context = LocalContext.current
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         when (entry.state) {
@@ -356,6 +391,9 @@ private fun AssistantActions(entry: Entry, all: List<Entry>, practice: Boolean, 
                 OutlinedButton(onClick = { vm.setTarget(entry.id, EntryAction.ASK) }) { Text(context.getString(R.string.follow_up)) }
                 OutlinedButton(onClick = { vm.setTarget(entry.id, EntryAction.EXPAND) }) { Text(context.getString(R.string.expand)) }
                 if (practice) OutlinedButton(onClick = { vm.setTarget(entry.id, EntryAction.MISTAKE) }) { Text(context.getString(R.string.mistake)) }
+                if (!practice && onAddToReview != null) {
+                    OutlinedButton(onClick = { onAddToReview(entry) }) { Text(context.getString(R.string.add_to_review)) }
+                }
             }
             EntryState.FAILED, EntryState.CANCELLED, EntryState.INTERRUPTED -> {
                 val user = all.firstOrNull { it.id == entry.parentEntryId }
