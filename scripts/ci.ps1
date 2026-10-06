@@ -17,6 +17,8 @@ param(
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
 if ($Serial -notmatch '^emulator-\d+$') { throw 'This pipeline only targets an explicitly named Android emulator, never a physical phone.' }
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -52,6 +54,7 @@ function Get-WorkTreeId {
     }
 }
 if ($Full) { $treeAtStart = Get-WorkTreeId }
+if ($Full) { $python = (Get-Command python -ErrorAction Stop).Source }
 
 function Invoke-Step([string]$Name, [scriptblock]$Body) {
     Write-Host "==> $Name" -ForegroundColor Cyan
@@ -98,21 +101,16 @@ if ($Full) {
 
     Invoke-Step 'Instrumented + UI tests' {
         $log = Join-Path $logDir 'instrumented.log'
-        & $adb -s $Serial shell am instrument -w com.feiyu.notes.test/androidx.test.runner.AndroidJUnitRunner *> $log
-        $out = Get-Content $log -Raw
-        # am instrument exits 0 even on failures; the runner's summary line is the verdict.
-        if ($out -match '(?m)^OK \((\d+) tests?\)') {
-            Write-Host "    $($Matches[0])"
-            $global:LASTEXITCODE = 0
-        } else {
-            Get-Content $log | Where-Object { $_ -notmatch '^\s+at ' } | Select-Object -Last 40
-            $global:LASTEXITCODE = 1
-        }
+        & $adb -s $Serial shell am instrument -w -r com.feiyu.notes.test/androidx.test.runner.AndroidJUnitRunner *> $log
+        if ($LASTEXITCODE -ne 0) { throw "ADB test command failed (exit $LASTEXITCODE); see $log" }
+        # ADB may exit 0 on test failures; validate terminal statuses and required suites too.
+        & $python scripts/parse-test-runner.py --log $log --classes 'com.feiyu.notes.data.NotebookStoreTest,com.feiyu.notes.study.GeneratorTest,com.feiyu.notes.ui.UiFlowTest'
+        if ($LASTEXITCODE -ne 0) { Get-Content $log -Encoding utf8 | Where-Object { $_ -notmatch '^\s+at ' } | Select-Object -Last 40 }
     }
     Invoke-Step 'UI screenshots' {
         $screenshots = Join-Path $logDir 'screenshots'
         New-Item -ItemType Directory -Force $screenshots | Out-Null
-        foreach ($name in @('chat-en-phone', 'chat-zh-phone', 'math-chat-phone', 'multi-photo-phone', 'support-phone')) {
+        foreach ($name in @('chat-en-phone', 'chat-zh-phone', 'math-chat-phone', 'multi-photo-phone', 'support-phone', 'course-review-dialog', 'course-review-list', 'course-review-note-add', 'course-review-source-deleted')) {
             & $adb -s $Serial pull "/sdcard/Android/data/com.feiyu.notes/files/ui-evidence/$name.png" (Join-Path $screenshots "$name.png")
             if ($LASTEXITCODE -ne 0) { throw "Missing UI screenshot: $name" }
         }

@@ -589,7 +589,7 @@ class UiFlowTest {
         waitText("已加入复习")
 
         // Return to lesson list
-        compose.onNodeWithContentDescription("返回").performClick()
+        systemBack()
         waitText("课程复习")
         click("课程复习")
 
@@ -651,8 +651,8 @@ class UiFlowTest {
         waitText("已加入复习")
 
         // Back to lesson screen, then back to lesson list
-        compose.onNodeWithContentDescription("返回").performClick()
-        compose.onNodeWithContentDescription("返回").performClick()
+        systemBack()
+        systemBack()
         waitText("课程复习")
         click("课程复习")
 
@@ -695,7 +695,7 @@ class UiFlowTest {
         compose.waitUntil(5_000) { compose.onAllNodesWithText("什么是微积分？").fetchSemanticsNodes().isEmpty() }
 
         // Navigate to CourseReviewScreen
-        compose.onNodeWithContentDescription("返回").performClick()
+        systemBack()
         waitText("课程复习")
         click("课程复习")
 
@@ -752,7 +752,7 @@ class UiFlowTest {
         createNotebook("新建课程", "草稿测试课")
         click("草稿测试课")
         click("新课次")
-        compose.onNodeWithContentDescription("返回").performClick()
+        systemBack()
         waitText("课程复习")
         click("课程复习")
 

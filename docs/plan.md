@@ -241,3 +241,15 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 - 数据校验：`insertReviewRecord` 强校验 `notebookId` 归属 COURSE 课程，且 `sourceEntryId` 必须属于同一课程，防止跨课污染；对同一来源防重复插入。
 - 界面流：`ChatScreen` 与 `NoteScreen` 提供「加入复习」；`LessonListScreen` 提供「复习记录」入口导航至 `CourseReviewScreen`，支持状态切换、编辑、删除与跳转回来源。
 - 零模型请求：纯本地 SQLite 操作，无模型调用，不修改现有的提示词与请求流。
+
+## 0.3.3 课程复习发布验证
+
+日期：2026-10-06。基线：PR #2 合并提交 `c370aaf`，实际工程与远端为 `E:\Projects\Opensource\肥鱼笔记`、`Yongzhaooo/FeiyuNote`。版本为 0.3.3 / versionCode 8，数据库 v4；沿用现有签名和 GitHub 预览版、独立下载站双渠道。
+
+- 本地 CI 接入 PR 的 `parse-test-runner.py`，检查 ADB 退出码、runner 逐项状态和必须执行的数据层、生成器、界面测试类；增加四张复习界面截图的收集。Python 子进程显式启用 UTF-8。
+- 原测试在双栏模拟器出现两个「返回」按钮，导致四个新增用例选中歧义；改为复用系统返回辅助方法，保留原行为断言。定向复测四项全部通过。
+- 解析器已有七项合成日志回归全部通过；JVM 单测 76 项通过。最终 `scripts/ci.ps1 -Full` 通过：76 项 JVM 单测，设备 runner 55 项（54 通过、1 跳过、0 失败），涵盖 6 个测试类，九张截图已提取；复习列表和来源删除状态截图已检查。
+- 原有未提交 `docs/tutorial/` 和 `output/` 属于用户工作，不纳入本次发布提交。
+
+- 签名 ssembleRelease lintVitalRelease --no-configuration-cache 通过；实际 APK 包名为 com.feiyu.notes、0.3.3 / 8、minSdk 26、debuggable=false。证书 SHA-256 与已发布 0.3.2 相同（10caccf5…d88b）；本地 release APK SHA-256 为 7e3024c52b147b6242be9be73bc5ab75f20d74d5a1d4ee0f2f67e6661ccfedc9。日志位于 build/ci/，产物位于 app/build/outputs/apk/release/app-release.apk。
+- 本次未执行真实 DeepSeek 请求、真机浏览器下载或真实折叠态验收。GitHub tag CI 与双渠道发布结果在完成后补充。
