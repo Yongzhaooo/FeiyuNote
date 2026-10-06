@@ -232,7 +232,7 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 
 ## 课程复习记录实施边界与验证（试验阶段）
 
-日期：2026-10-02。状态：实施中。产品范围以 [spec §12](spec.md#12-课程复习记录试验) 与 [memory-design §1](memory-design.md#1-课程内复习记录试验当前阶段实施规格) 为准。
+日期：2026-10-02；2026-10-06 已随 0.3.3 发布。产品范围以 [spec §12](spec.md#12-课程复习记录试验) 与 [memory-design §1](memory-design.md#1-课程内复习记录试验当前阶段实施规格) 为准。最终验证和发布证据见下方「0.3.3 课程复习发布验证」。
 
 ### 架构与变更边界
 - 数据库版本：`VERSION` 由 3 增至 4，保留已有的 v1→v2→v3 升级链。
@@ -252,4 +252,7 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 - 原有未提交 `docs/tutorial/` 和 `output/` 属于用户工作，不纳入本次发布提交。
 
 - 签名 ssembleRelease lintVitalRelease --no-configuration-cache 通过；实际 APK 包名为 com.feiyu.notes、0.3.3 / 8、minSdk 26、debuggable=false。证书 SHA-256 与已发布 0.3.2 相同（10caccf5…d88b）；本地 release APK SHA-256 为 7e3024c52b147b6242be9be73bc5ab75f20d74d5a1d4ee0f2f67e6661ccfedc9。日志位于 build/ci/，产物位于 app/build/outputs/apk/release/app-release.apk。
-- 本次未执行真实 DeepSeek 请求、真机浏览器下载或真实折叠态验收。GitHub tag CI 与双渠道发布结果在完成后补充。
+- 本次未执行真实 DeepSeek 请求、真机浏览器下载或真实折叠态验收；设备 runner 跳过项为默认关闭的真实 API 冒烟。
+- 发布提交 `0d9a86c6555c79e9affc585b438f17f541c9b707` 已推送到 main，标签 `v0.3.3` 指向该提交。[main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/37472672999) 与 [tag 构建、单测及签名发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/37472673231) 均通过；[GitHub 预览版](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.3) 已发布。
+- 下载实际 Release 产物 `build/release-v0.3.3/feiyu-notes-v0.3.3.apk` 验签通过，0.3.3 / 8、minSdk 26、debuggable=false，证书与 0.3.2 一致。其 SHA-256 为 `2285f71387e314a85061476f08bd313c6c20ca338eb75a25010f6dfd8ced0c6e`；本地构建与远端构建的 APK 字节不同，公开双渠道统一使用远端 Release 产物。
+- 同一 Release APK 已用 `scripts/publish-download.ps1` 发布至 `yz_vps:/srv/feiyunote`，更新索引最后原子切换。线上 [下载页](https://feiyunote.cangming.fyi/feiyu/) 和 APK 下载均为 HTTP 200，APK MIME 正确，实际下载 SHA-256 与 Release 相同；[更新索引](https://feiyunote.cangming.fyi/updates/android.json) 为 0.3.3 / 8、minSdk 26、正确下载页地址，Cache-Control 为 no-cache。

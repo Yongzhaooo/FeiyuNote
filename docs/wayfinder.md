@@ -2,6 +2,8 @@
 
 **Project outcome:** 面向可拍照的移动设备提供随手记录方案；在安卓手机、平板或折叠屏上按课程、课次拍照或选图提问，获得 DeepSeek 讲解并整理成本地笔记，刷题本记录错题与掌握状态。[1.0 目标](plan.md#10-稳定开发目标)是现有 Android 应用的稳定开发；[2.0 长期目标](plan.md#20-ios-长期目标)为 iOS 支持，尚未启动。[spec](spec.md) 定义产品规则，[plan](plan.md) 保存实现边界与验证证据。
 
+**Current answer:** 2026-10-06，课程复习记录已随 [0.3.3](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.3) 发布，接入本地完整 CI；GitHub 与独立下载站使用同一签名 APK。验证和发布证据见 [plan](plan.md#033-课程复习发布验证)。真机下载与真实折叠态仍待验证。
+
 ## Next actions
 
 以下两项待选择范围：
@@ -23,8 +25,6 @@
 
 ## Done (rolling)
 
+- **0.3.3 课程复习记录（2026-10-06）** — PR #2 已合并，复习记录、迁移、来源回查与删除标记通过完整本地 CI；双栏返回用例已修正。GitHub 预览版和独立下载站均已发布，更新索引为 0.3.3；证据见 [plan](plan.md#033-课程复习发布验证)。
 - **0.3.1 公共聊天与阅读设置（2026-10-01）** — 公共聊天卡片与可替换插图、预装引导式讲解、高级区（内置提示词编辑、Skill 文字导入）、默认 V4.1 Flash + low/high/max 三档推理强度（默认 low，设置可改、会话可覆盖）、连接测试、问答配对编号、右侧跳转节点、语言/主题/字号与字重修复随 [v0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1) 发布；验证见 [plan](plan.md#执行记录)。
 - **0.3 多图附件（2026-10-01）** — 多选、追加拍照、移除、旧库迁移与双语版本记录已随 [v0.3.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.0) 发布；本地/远端 CI 和实际 APK 验证见 [plan](plan.md#执行记录)。
-
-- **贡献流程与 PR CI（2026-10-01）** — Issue 表单、批准范围后提交 PR 的流程及只读构建已配置；入口见 [贡献指南](../CONTRIBUTING.md)，验证见 [执行记录](plan.md#执行记录)。
-- **0.2 发布（2026-10-01）** — 离线公式与凭据保护已随 [v0.2.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.2.0) 发布；本地/远端 CI、APK 校验及 SDK 恢复入口见 [plan](plan.md)。
