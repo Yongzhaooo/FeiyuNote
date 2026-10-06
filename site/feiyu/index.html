@@ -5,30 +5,71 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>肥鱼笔记下载</title>
 <style>
-  :root { color-scheme: light dark; --fg: #1b1b1f; --muted: #5d5e66; --bg: #fbfbff; --card: #ffffff; --line: #d9dae2; --accent: #2d5bd3; --on-accent: #ffffff; }
+  :root {
+    color-scheme: light dark;
+    --fg: #1c2640; --muted: #4a5671; --bg: #f2f6fd; --card: #ffffff; --line: #ccd5e6; --soft: #e5ebf7;
+    --accent: #3f57a8; --on-accent: #ffffff; --sky: #d3eefb; --on-sky: #0b4a66; --blush: #ffdce6; --on-blush: #5b1733;
+    --hero-a: #dde3ff; --hero-b: #d3eefb; --hero-c: #ffdce6; --on-hero: #142a63; --bubble: rgba(255,255,255,.7);
+    --shadow: 0 6px 20px rgba(63,87,168,.12);
+  }
   @media (prefers-color-scheme: dark) {
-    :root { --fg: #e4e2e6; --muted: #a9a9b3; --bg: #121318; --card: #1c1d23; --line: #34353d; --accent: #a8c0ff; --on-accent: #10213f; }
+    :root {
+      --fg: #e3e8f6; --muted: #bcc6dd; --bg: #0e1424; --card: #182035; --line: #3a4561; --soft: #2b3550;
+      --accent: #b4c4ff; --on-accent: #15296a; --sky: #134d68; --on-sky: #d3eefb; --blush: #7a2d4b; --on-blush: #ffdce6;
+      --hero-a: #2f4486; --hero-b: #134d68; --hero-c: #7a2d4b; --on-hero: #dde3ff; --bubble: rgba(255,255,255,.14);
+      --shadow: 0 6px 20px rgba(0,0,0,.35);
+    }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
-  main { max-width: 640px; margin: 0 auto; padding: 32px 16px 48px; }
-  h1 { font-size: 1.75rem; margin: 0 0 4px; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.75rem; margin: 0 0 4px; line-height: 1.25; }
   h2 { font-size: 1.1rem; margin: 28px 0 8px; }
+  p { margin: 0; }
   .muted { color: var(--muted); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-top: 20px; }
-  .download { display: block; text-align: center; background: var(--accent); color: var(--on-accent); text-decoration: none; font-weight: 600; font-size: 1.1rem; padding: 14px 20px; border-radius: 999px; }
-  .download:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-  .link { display: block; overflow-wrap: anywhere; font-family: ui-monospace, Consolas, monospace; font-size: .9rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 12px; user-select: all; }
-  .notes { white-space: pre-wrap; margin: 0; }
-  ol { padding-left: 1.4em; }
+  .hero { position: relative; overflow: hidden; border-radius: 26px; padding: 22px 20px 20px; color: var(--on-hero);
+    background: linear-gradient(135deg, var(--hero-a), var(--hero-b) 60%, var(--hero-c)); box-shadow: var(--shadow); }
+  .hero .muted { color: var(--on-hero); opacity: .85; }
+  .hero > *:not(.bubbles) { position: relative; }
+  .whale { float: right; width: 96px; height: auto; margin: 0 0 4px 8px; }
+  .bubbles i { position: absolute; border-radius: 50%; background: var(--bubble); }
+  .bubbles i:nth-child(1) { width: 70px; height: 70px; right: -14px; bottom: -18px; }
+  .bubbles i:nth-child(2) { width: 26px; height: 26px; right: 90px; bottom: 14px; }
+  .bubbles i:nth-child(3) { width: 14px; height: 14px; left: 46%; top: 12px; }
+  .greet { margin-top: 12px; display: inline-block; background: var(--bubble); border-radius: 18px 18px 18px 6px; padding: 8px 14px; font-size: .95rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 20px; margin-top: 16px; box-shadow: var(--shadow); }
+  .download { display: block; text-align: center; background: var(--accent); color: var(--on-accent); text-decoration: none; font-weight: 700; font-size: 1.1rem; padding: 14px 20px; border-radius: 999px; }
+  .download:focus-visible, a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .link { display: block; overflow-wrap: anywhere; font-family: ui-monospace, Consolas, monospace; font-size: .9rem; background: var(--soft); border-radius: 14px; padding: 8px 12px; margin-top: 12px; user-select: all; }
+  .notes { white-space: pre-wrap; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 4px 20px 16px; margin-top: 16px; }
+  ol { padding-left: 1.4em; margin: 0; }
+  li + li { margin-top: 4px; }
   a { color: var(--accent); }
-  footer { margin-top: 32px; font-size: .9rem; }
+  .group { background: var(--blush); color: var(--on-blush); border-color: transparent; }
+  .group h2 { margin: 0 0 6px; }
+  .group-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
+  .group-no { font-size: 1.15rem; font-weight: 700; letter-spacing: .02em; background: var(--card); color: var(--fg); border-radius: 999px; padding: 6px 16px; user-select: all; }
+  .copy { font: inherit; font-weight: 600; cursor: pointer; border: 0; border-radius: 999px; padding: 8px 18px; background: var(--on-blush); color: var(--blush); }
+  .group p { font-size: .95rem; }
+  footer { margin-top: 28px; font-size: .9rem; }
 </style>
 </head>
 <body>
 <main>
-  <h1>肥鱼笔记 <span lang="en" class="muted">Feiyu Notes</span></h1>
-  <p class="muted">Android 学习笔记应用 · 版本 {{VERSION_NAME}} · 需要 Android {{MIN_ANDROID}} 或更高</p>
+  <header class="hero">
+    <div class="bubbles" aria-hidden="true"><i></i><i></i><i></i></div>
+    <svg class="whale" viewBox="0 0 96 72" role="img" aria-label="小鲸鱼" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 44c0-18 16-30 36-30 14 0 26 7 30 18 4-2 9-8 10-14 3 12-2 24-12 28-7 12-22 18-38 16C16 60 8 54 8 44z" fill="#3f57a8"/>
+      <path d="M20 50c8 8 24 10 38 4 10-4 16-10 18-16-10 10-34 18-56 12z" fill="#ffffff" opacity=".85"/>
+      <circle cx="30" cy="38" r="3.2" fill="#ffffff"/><circle cx="30.8" cy="37.4" r="1.4" fill="#1c2640"/>
+      <ellipse cx="42" cy="46" rx="5" ry="3" fill="#ffb1c8" opacity=".9"/>
+      <path d="M36 8c-2-4 2-6 0-8M46 10c-2-3 1-5 0-7" stroke="#8ed1f3" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    </svg>
+    <h1>肥鱼笔记 <span lang="en" class="muted">Feiyu Notes</span></h1>
+    <p class="muted">Android 学习笔记应用 · 版本 {{VERSION_NAME}} · 需要 Android {{MIN_ANDROID}} 或更高</p>
+    <p class="greet">用户酱，我是鱼鱼，一起把今天的课记下来吧。</p>
+  </header>
 
   <div class="card">
     <a class="download" href="{{APK_FILE}}" download aria-label="下载肥鱼笔记 {{VERSION_NAME}} 安装包（APK，{{APK_SIZE}}）">下载 APK（{{APK_SIZE}}）</a>
@@ -37,15 +78,28 @@
     <p class="muted" style="margin:8px 0 0;font-size:.85rem;overflow-wrap:anywhere">SHA-256：{{APK_SHA256}}</p>
   </div>
 
+  <section class="card group" aria-labelledby="group-title">
+    <h2 id="group-title">交流群 <span lang="en" style="font-weight:400;font-size:.9rem">Discussion group</span></h2>
+    <p>一起聊聊学习和使用心得吧。</p>
+    <div class="group-row">
+      <span class="group-no" id="qq-group">QQ 群：1079399140</span>
+      <button type="button" class="copy" id="copy-group" data-copy="1079399140" data-done="已复制 · Copied">复制群号</button>
+    </div>
+    <p style="margin-top:10px">遇到问题请优先在应用的“设置 › 关于与帮助”里提交反馈。</p>
+    <p lang="en" style="margin-top:4px">QQ group: 1079399140. Please report problems from Settings › About and help in the app first.</p>
+  </section>
+
   <h2>更新说明</h2>
   <p class="notes">{{NOTES_ZH}}</p>
 
   <h2>安装步骤</h2>
-  <ol>
-    <li>点击“下载 APK”，等待浏览器下载完成。</li>
-    <li>打开下载的文件。首次安装时系统可能提示“允许此来源安装应用”，按提示允许后返回。</li>
-    <li>在系统确认页点击“安装”。从旧版升级会直接覆盖，笔记、照片和设置都会保留。</li>
-  </ol>
+  <div class="panel" style="padding-top:16px">
+    <ol>
+      <li>点击“下载 APK”，等待浏览器下载完成。</li>
+      <li>打开下载的文件。首次安装时系统可能提示“允许此来源安装应用”，按提示允许后返回。</li>
+      <li>在系统确认页点击“安装”。从旧版升级会直接覆盖，笔记、照片和设置都会保留。</li>
+    </ol>
+  </div>
 
   <section lang="en">
     <h2>English</h2>
@@ -57,5 +111,30 @@
     源代码与许可证：<a href="LICENSE.txt">LICENSE</a> · <a href="https://github.com/Yongzhaooo/FeiyuNote/tree/v{{VERSION_NAME}}">v{{VERSION_NAME}} 源代码</a>（GitHub，可选）
   </footer>
 </main>
+<script>
+(function () {
+  var btn = document.getElementById('copy-group');
+  var label = btn.textContent;
+  function done() {
+    btn.textContent = btn.getAttribute('data-done');
+    setTimeout(function () { btn.textContent = label; }, 2000);
+  }
+  function fallback() {
+    // Select the visible text so the user can copy it by hand.
+    var r = document.createRange();
+    r.selectNodeContents(document.getElementById('qq-group'));
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    try { if (document.execCommand('copy')) { done(); return; } } catch (e) {}
+    btn.textContent = '已选中，请长按复制';
+    setTimeout(function () { btn.textContent = label; }, 3000);
+  }
+  btn.addEventListener('click', function () {
+    var n = btn.getAttribute('data-copy');
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(n).then(done, fallback);
+    } else { fallback(); }
+  });
+})();
+</script>
 </body>
 </html>

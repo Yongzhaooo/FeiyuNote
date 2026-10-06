@@ -25,34 +25,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.feiyu.notes.R
 
-// Indigo hair, lake-blue accents and warm paper, shared by every screen.
+// Taken from the whale girl: indigo hair, sky-blue streaks, blush cheeks and white frills.
+// Pages use a pale-sea background; cards and sheets are white (light) or lifted navy (dark).
 val LocalDarkTheme = staticCompositionLocalOf { false }
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF384B78), onPrimary = Color.White,
-    primaryContainer = Color(0xFFDDE5FA), onPrimaryContainer = Color(0xFF172B50),
-    secondary = Color(0xFF21677C), onSecondary = Color.White,
-    secondaryContainer = Color(0xFFDCEFF5), onSecondaryContainer = Color(0xFF164B5D),
-    tertiary = Color(0xFF765775), onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFF2DDF0), onTertiaryContainer = Color(0xFF523950),
-    background = Color(0xFFF7F9FC), onBackground = Color(0xFF202B3F),
-    surface = Color(0xFFFCFCFF), onSurface = Color(0xFF202B3F),
-    surfaceVariant = Color(0xFFE9EEF5), onSurfaceVariant = Color(0xFF4B586B),
-    surfaceContainer = Color(0xFFEEF2F8), surfaceContainerLow = Color(0xFFF2F5FA),
-    surfaceContainerHigh = Color(0xFFE6ECF5), outline = Color(0xFF738095),
+    primary = Color(0xFF3F57A8), onPrimary = Color.White,
+    primaryContainer = Color(0xFFDDE3FF), onPrimaryContainer = Color(0xFF142A63),
+    secondary = Color(0xFF1F78A3), onSecondary = Color.White,
+    secondaryContainer = Color(0xFFD3EEFB), onSecondaryContainer = Color(0xFF0B4A66),
+    tertiary = Color(0xFFB0476E), onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFFFDCE6), onTertiaryContainer = Color(0xFF5B1733),
+    background = Color(0xFFF2F6FD), onBackground = Color(0xFF1C2640),
+    surface = Color.White, onSurface = Color(0xFF1C2640),
+    surfaceVariant = Color(0xFFE5EBF7), onSurfaceVariant = Color(0xFF4A5671),
+    surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFF7F9FE),
+    surfaceContainer = Color(0xFFF0F4FC), surfaceContainerHigh = Color(0xFFEAEFF9),
+    surfaceContainerHighest = Color(0xFFE3E9F5),
+    outline = Color(0xFF7A86A1), outlineVariant = Color(0xFFCCD5E6),
 )
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFB7C9F5), onPrimary = Color(0xFF1E3259),
-    primaryContainer = Color(0xFF30466F), onPrimaryContainer = Color(0xFFDDE5FA),
-    secondary = Color(0xFF95D1E6), onSecondary = Color(0xFF003545),
-    secondaryContainer = Color(0xFF194B5D), onSecondaryContainer = Color(0xFFDCEFF5),
-    tertiary = Color(0xFFE0BBDD), onTertiary = Color(0xFF412B40),
-    tertiaryContainer = Color(0xFF594158), onTertiaryContainer = Color(0xFFF2DDF0),
-    background = Color(0xFF111824), onBackground = Color(0xFFE2E8F4),
-    surface = Color(0xFF151E2D), onSurface = Color(0xFFE2E8F4),
-    surfaceVariant = Color(0xFF2D384B), onSurfaceVariant = Color(0xFFBBC6D9),
-    surfaceContainer = Color(0xFF1C2636), surfaceContainerLow = Color(0xFF192232),
-    surfaceContainerHigh = Color(0xFF273245), outline = Color(0xFF8A97AC),
+    primary = Color(0xFFB4C4FF), onPrimary = Color(0xFF15296A),
+    primaryContainer = Color(0xFF2F4486), onPrimaryContainer = Color(0xFFDDE3FF),
+    secondary = Color(0xFF8ED1F3), onSecondary = Color(0xFF00344A),
+    secondaryContainer = Color(0xFF134D68), onSecondaryContainer = Color(0xFFD3EEFB),
+    tertiary = Color(0xFFFFB1C8), onTertiary = Color(0xFF5B1733),
+    tertiaryContainer = Color(0xFF7A2D4B), onTertiaryContainer = Color(0xFFFFDCE6),
+    background = Color(0xFF0E1424), onBackground = Color(0xFFE3E8F6),
+    surface = Color(0xFF182035), onSurface = Color(0xFFE3E8F6),
+    surfaceVariant = Color(0xFF2B3550), onSurfaceVariant = Color(0xFFBCC6DD),
+    surfaceContainerLowest = Color(0xFF0B101D), surfaceContainerLow = Color(0xFF141B2E),
+    surfaceContainer = Color(0xFF1B2339), surfaceContainerHigh = Color(0xFF222B42),
+    surfaceContainerHighest = Color(0xFF2A344D),
+    outline = Color(0xFF8792AD), outlineVariant = Color(0xFF3A4561),
 )
 private val ReadingFont = FontFamily(
     Font(R.font.noto_sans_sc_regular, weight = FontWeight.Normal),
@@ -108,7 +113,11 @@ fun FeiyuTheme(content: @Composable () -> Unit) {
         MaterialTheme(
             colorScheme = if (dark) DarkColors else LightColors,
             typography = ReadingType,
-            shapes = Shapes(small = RoundedCornerShape(8.dp), medium = RoundedCornerShape(12.dp), large = RoundedCornerShape(20.dp)),
+            // Rounder than Material defaults: soft chips, bubbly cards and pill-like fields.
+            shapes = Shapes(
+                extraSmall = RoundedCornerShape(10.dp), small = RoundedCornerShape(14.dp), medium = RoundedCornerShape(20.dp),
+                large = RoundedCornerShape(26.dp), extraLarge = RoundedCornerShape(32.dp),
+            ),
             content = content,
         )
     }

@@ -2,13 +2,14 @@ package com.feiyu.notes.ui
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -74,20 +75,22 @@ fun ActionIcon(@DrawableRes icon: Int, description: String, onClick: () -> Unit,
 @Composable
 fun WelcomeCard(compact: Boolean = false, general: Boolean = false) {
     val context = LocalContext.current
-    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.large,
-        modifier = Modifier.padding(16.dp).fillMaxWidth()) {
-        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            // General chat gets its own banner and illustration, matching its home card.
-            if (general) CustomImage(context.app.chatImage, R.drawable.whale_01_07, Modifier.size(88.dp))
-            else CustomImage(context.app.welcomeImage, R.drawable.whale_02_01, Modifier.size(if (compact) 64.dp else 88.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(context.getString(if (general) R.string.general_chat_tag else R.string.welcome_title), style = MaterialTheme.typography.titleMedium)
-                Text(context.getString(when {
-                    general -> R.string.general_chat_welcome
-                    compact -> R.string.welcome_short
-                    else -> R.string.welcome_body
-                }), style = MaterialTheme.typography.bodyMedium)
-            }
+    val colors = MaterialTheme.colorScheme
+    HeroCard(
+        colors = if (general) listOf(colors.tertiaryContainer, colors.primaryContainer) else listOf(colors.primaryContainer, colors.secondaryContainer),
+        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+    ) {
+        val ring = Modifier.border(3.dp, Color.White, CircleShape)
+        // General chat gets its own banner and illustration, matching its home card.
+        if (general) CustomImage(context.app.chatImage, R.drawable.whale_01_07, Modifier.size(88.dp).then(ring))
+        else CustomImage(context.app.welcomeImage, R.drawable.whale_02_01, Modifier.size(if (compact) 64.dp else 88.dp).then(ring))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(context.getString(if (general) R.string.general_chat_tag else R.string.welcome_title), style = MaterialTheme.typography.titleMedium)
+            Text(context.getString(when {
+                general -> R.string.general_chat_welcome
+                compact -> R.string.welcome_short
+                else -> R.string.welcome_body
+            }), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -110,24 +113,22 @@ fun CustomImage(files: com.feiyu.notes.settings.AvatarFiles, @DrawableRes defaul
 @Composable
 fun GeneralChatCard(onClick: () -> Unit) {
     val context = LocalContext.current
-    ElevatedCard(
+    val colors = MaterialTheme.colorScheme
+    HeroCard(
+        colors = listOf(colors.tertiaryContainer, colors.secondaryContainer),
         onClick = onClick,
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().testTag("general-chat"),
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            CustomImage(context.app.chatImage, R.drawable.whale_01_07, Modifier.size(72.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Surface(color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary, shape = CircleShape) {
-                    Text(context.getString(R.string.general_chat_tag), Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
-                }
-                Text(context.getString(R.string.general_chat), style = MaterialTheme.typography.titleMedium)
-                Text(context.getString(R.string.general_chat_hint), style = MaterialTheme.typography.bodySmall)
+        CustomImage(context.app.chatImage, R.drawable.whale_01_07, Modifier.size(72.dp).border(3.dp, Color.White, CircleShape))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Surface(color = colors.tertiary, contentColor = colors.onTertiary, shape = CircleShape) {
+                Text(context.getString(R.string.general_chat_tag), Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
             }
-            Surface(color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary, shape = CircleShape) {
-                Icon(painterResource(R.drawable.ic_send), context.getString(R.string.start_chat), Modifier.padding(12.dp).size(20.dp))
-            }
+            Text(context.getString(R.string.general_chat), style = MaterialTheme.typography.titleMedium)
+            Text(context.getString(R.string.general_chat_hint), style = MaterialTheme.typography.bodySmall)
+        }
+        Surface(color = colors.primary, contentColor = colors.onPrimary, shape = CircleShape) {
+            Icon(painterResource(R.drawable.ic_send), context.getString(R.string.start_chat), Modifier.padding(12.dp).size(20.dp))
         }
     }
 }

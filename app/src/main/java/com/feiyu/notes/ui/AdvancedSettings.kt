@@ -45,7 +45,7 @@ fun HomeImageSettings() {
             busy = false
         }
     }
-    SettingsSection(context.getString(R.string.home_images)) {
+    SettingsSection(context.getString(R.string.home_images), R.drawable.ic_gallery, Accent.SEA) {
         Text(context.getString(R.string.home_images_hint), style = MaterialTheme.typography.bodySmall)
         listOf(
             Triple(app.welcomeImage, R.drawable.whale_02_01, R.string.welcome_image),
@@ -75,7 +75,7 @@ fun HomeImageSettings() {
 fun AdvancedSettings() {
     val context = LocalContext.current
     var expanded by rememberSaveable { mutableStateOf(false) }
-    SettingsSection(context.getString(R.string.advanced)) {
+    SettingsSection(context.getString(R.string.advanced), R.drawable.ic_tools, Accent.INDIGO) {
         Text(context.getString(R.string.advanced_hint), style = MaterialTheme.typography.bodySmall)
         TextButton(onClick = { expanded = !expanded }, modifier = Modifier.testTag("advanced-toggle")) {
             Text(context.getString(if (expanded) R.string.hide_advanced else R.string.show_advanced))
@@ -105,7 +105,7 @@ private fun BuiltInPrompts() {
         )
     }
     editing?.let { kind ->
-        var text by rememberSaveable(kind) { mutableStateOf(prefs.prompt(kind)) }
+        var text by rememberSaveable(kind) { mutableStateOf(prefs.prompt(kind, com.feiyu.notes.settings.AppLanguage.current(context))) }
         AlertDialog(
             onDismissRequest = { editing = null },
             title = { Text(context.getString(promptLabel(kind))) },

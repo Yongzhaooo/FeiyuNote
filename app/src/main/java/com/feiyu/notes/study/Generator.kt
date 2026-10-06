@@ -14,6 +14,7 @@ import com.feiyu.notes.data.EntryKind
 import com.feiyu.notes.data.EntryState
 import com.feiyu.notes.data.NotebookStore
 import com.feiyu.notes.data.PhotoFiles
+import com.feiyu.notes.data.Template
 import com.feiyu.notes.support.DiagnosticOperation
 import com.feiyu.notes.support.DiagnosticResult
 import com.feiyu.notes.support.Diagnostics
@@ -56,10 +57,11 @@ class Generator(
     private val ready: Job,
     private val generate: suspend (AiConfig, AiInput) -> AiReply = { config, input -> DeepSeekClient(config).generate(input) },
     /** Current text of a built-in system prompt (user override or default). */
-    private val prompt: (PromptKind) -> String = { it.default },
+    private val prompt: (PromptKind, String) -> String = { kind, language -> kind.default(language) },
     private val diagnostics: Diagnostics? = null,
 ) {
     private val context get() = AppLanguage.context(appContext)
+    private val language get() = AppLanguage.code(context.resources.configuration.locales[0].language)
     private val _status = MutableStateFlow(GenerationStatus())
     val status: StateFlow<GenerationStatus> = _status.asStateFlow()
 
@@ -87,7 +89,7 @@ class Generator(
     suspend fun summarize(notebookId: Long, lessonId: Long, templateId: Long?): StartResult = exclusive {
         ready.join()
         val template = templateId?.let { store.getTemplate(it) ?: return@exclusive StartResult.Invalid(TEMPLATE_GONE) }
-        val (input, sources) = ContextBuilder.buildSummary(store.readEntries(lessonId), template, prompt(PromptKind.SUMMARY))
+        val (input, sources) = ContextBuilder.buildSummary(store.readEntries(lessonId), template?.localized(), language, prompt(PromptKind.SUMMARY, language))
             ?: return@exclusive StartResult.Invalid(context.getString(R.string.summary_empty))
         val running = GenerationStatus.Running(notebookId, lessonId, null, isSummary = true)
         _status.value = GenerationStatus(running)
@@ -133,8 +135,8 @@ class Generator(
                 val entries = store.readEntries(user.lessonId, includeArchived = true)
                 val reference = user.sourceEntryIds.firstOrNull()?.let { store.getEntry(it) }
                 val template = user.templateId?.let { store.getTemplate(it) }
-                val base = prompt(if (notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) PromptKind.GENERAL else PromptKind.STUDY)
-                val input = ContextBuilder.buildTurn(user, entries, reference, template, resolvePhoto = { photos.resolvePhoto(notebookId, it) }, base = base)
+                val base = prompt(if (notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) PromptKind.GENERAL else PromptKind.STUDY, language)
+                val input = ContextBuilder.buildTurn(user, entries, reference, template?.localized(), resolvePhoto = { photos.resolvePhoto(notebookId, it) }, language = language, base = base)
                 val answer = generate(requireConfig(user.lessonId), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
                 diagnostics?.record(DiagnosticOperation.GENERATE, DiagnosticResult.OK, durationMs = elapsed(started))
                 message = if (store.commitReply(reply.id, answer.text, EntryState.COMPLETE)) null else DISCARDED
@@ -174,6 +176,9 @@ class Generator(
         }
         return null
     }
+
+    private fun Template.localized() =
+        copy(instruction = StudyPrompts.localizedTemplate(instruction, source == Template.BUILTIN_GUIDED, language))
 
     private suspend fun requireConfig(lessonId: Long): AiConfig = loadConfig(lessonId) ?: throw AiError.MissingKey()
 

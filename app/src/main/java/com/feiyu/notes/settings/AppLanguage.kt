@@ -12,6 +12,9 @@ import java.util.Locale
 object AppLanguage {
     fun code(language: String): String = if (language.equals("zh", ignoreCase = true)) "zh" else "en"
 
+    /** "zh" or "en" as currently applied to the app's own text. */
+    fun current(base: Context): String = code(context(base).resources.configuration.locales[0].language)
+
     fun context(base: Context): Context {
         val config = Configuration(base.resources.configuration)
         val language = when (base.app.prefs.display.value.language) {

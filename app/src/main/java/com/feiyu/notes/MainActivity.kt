@@ -21,7 +21,10 @@ class MainActivity : ComponentActivity() {
         val initial = if (savedInstanceState == null) runBlocking { startStack() } else listOf(NotebookListKey)
         setContent {
             FeiyuTheme {
-                AppNavigation(initial)
+                // Pane gaps, placeholders and transitions show the page colour, not the light window default.
+                androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                    AppNavigation(initial)
+                }
             }
         }
     }
@@ -30,7 +33,9 @@ class MainActivity : ComponentActivity() {
     private suspend fun startStack(): List<NavKey> {
         val (notebookId, lessonId) = app.prefs.lastLesson ?: return listOf(NotebookListKey)
         val lesson = app.store.getLesson(lessonId)
-        if (lesson == null || lesson.notebookId != notebookId) {
+        val general = notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID
+        val features = app.prefs.features.value
+        if (lesson == null || lesson.notebookId != notebookId || (general && !features.chat) || (!general && !features.study)) {
             app.prefs.clearLastLesson()
             return listOf(NotebookListKey)
         }

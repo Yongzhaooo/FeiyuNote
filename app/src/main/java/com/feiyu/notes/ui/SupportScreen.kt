@@ -77,6 +77,7 @@ fun SupportScreen(vm: SupportViewModel, onBack: () -> Unit) {
         TopAppBar(
             title = { Text(context.getString(R.string.support_title)) },
             navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), onBack) },
+            colors = feiyuTopBarColors(),
         )
     }) { padding ->
         Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -84,7 +85,7 @@ fun SupportScreen(vm: SupportViewModel, onBack: () -> Unit) {
                 Modifier.widthIn(max = 640.dp).fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                SettingsSection(context.getString(R.string.support_version_title)) {
+                SettingsSection(context.getString(R.string.support_version_title), R.drawable.ic_sparkle, Accent.INDIGO) {
                     Text(context.getString(R.string.version_line, versionName, versionCode), Modifier.testTag("app-version"))
                     Button(enabled = update != UpdateState.Checking, onClick = vm::checkUpdate, modifier = Modifier.testTag("check-update")) {
                         Text(context.getString(if (update == UpdateState.Checking) R.string.checking_update else R.string.check_update))
@@ -97,7 +98,7 @@ fun SupportScreen(vm: SupportViewModel, onBack: () -> Unit) {
                     }
                 }
 
-                SettingsSection(context.getString(R.string.feedback_title)) {
+                SettingsSection(context.getString(R.string.feedback_title), R.drawable.ic_pencil, Accent.BLUSH) {
                     Text(context.getString(R.string.feedback_notice), style = MaterialTheme.typography.bodySmall)
                     val count = draft.description.trim().let { it.codePointCount(0, it.length) }
                     OutlinedTextField(
@@ -132,7 +133,7 @@ fun SupportScreen(vm: SupportViewModel, onBack: () -> Unit) {
                     status?.let { FeedbackStatusView(it, onCopyId = { copy(it) }) }
                 }
 
-                SettingsSection(context.getString(R.string.discussion_title)) {
+                SettingsSection(context.getString(R.string.discussion_title), R.drawable.ic_heart, Accent.SEA) {
                     SelectionContainer { Text(context.getString(R.string.qq_group, QQ_GROUP), Modifier.testTag("qq-group"), style = MaterialTheme.typography.titleSmall) }
                     Text(context.getString(R.string.qq_group_hint), style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = { copy(QQ_GROUP) }) { Text(context.getString(R.string.copy_group_number)) }

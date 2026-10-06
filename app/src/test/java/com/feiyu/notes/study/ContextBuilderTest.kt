@@ -118,4 +118,18 @@ class ContextBuilderTest {
         assertTrue(templated.systemText.endsWith("按报告格式"))
         assertNull(ContextBuilder.buildSummary(listOf(user(1, "q"), answer(2, 1, "", EntryState.FAILED)), null))
     }
+
+    @Test fun builtInPromptsFollowTheLanguage() {
+        val target = user(9, "hi")
+        val en = ContextBuilder.buildTurn(target, lesson + target, null, null, resolve, language = "en")
+        assertTrue(en.systemText.startsWith("You are a patient"))
+        assertTrue(ContextBuilder.buildTurn(target, lesson + target, null, null, resolve).systemText.startsWith("你是耐心"))
+        // Chat is soft and uses the 鱼鱼 / 用户酱 nicknames in both languages.
+        assertTrue(PromptKind.GENERAL.default("zh").contains("鱼鱼") && PromptKind.GENERAL.default("zh").contains("用户酱"))
+        assertTrue(PromptKind.GENERAL.default("en").contains("用户酱"))
+        // Only the untouched built-in template follows the language.
+        assertEquals(StudyPrompts.of("en").guided, StudyPrompts.localizedTemplate(StudyPrompts.GUIDED, true, "en"))
+        assertEquals("mine", StudyPrompts.localizedTemplate("mine", true, "en"))
+        assertEquals(StudyPrompts.GUIDED, StudyPrompts.localizedTemplate(StudyPrompts.GUIDED, false, "en"))
+    }
 }

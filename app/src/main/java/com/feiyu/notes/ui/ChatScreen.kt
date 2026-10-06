@@ -21,7 +21,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.semantics.contentDescription
@@ -46,10 +50,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -108,6 +109,7 @@ fun ChatScreen(
                     TextButton(enabled = d?.lesson != null && status.running == null, onClick = { summarizing = true }) { Text(context.getString(if (general) R.string.summarize_chat else R.string.summarize)) }
                     TextButton(enabled = d?.lesson != null, onClick = onOpenArchived) { Text(context.getString(R.string.archived)) }
                 },
+                colors = feiyuTopBarColors(),
             )
         },
     ) { padding ->
@@ -144,11 +146,23 @@ fun ChatScreen(
                             if (notes.isNotEmpty()) Text(context.getString(R.string.lesson_notes), Modifier.padding(16.dp, 8.dp), style = MaterialTheme.typography.titleSmall)
                         }
                         items(notes, key = { "note-${it.id}" }) { note ->
-                            ListItem(
-                                headlineContent = { Text(note.text.lineSequence().firstOrNull().orEmpty().take(40)) },
-                                supportingContent = { Text(context.getString(R.string.note_number, note.id)) },
-                                modifier = Modifier.clickable { onOpenNote(note.id) },
-                            )
+                            Surface(
+                                onClick = { onOpenNote(note.id) },
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.surface,
+                                border = softBorder(),
+                                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                            ) {
+                                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    IconBadge(R.drawable.ic_note, Accent.BLUSH)
+                                    Column(Modifier.weight(1f)) {
+                                        Text(note.text.lineSequence().firstOrNull().orEmpty().take(40), style = MaterialTheme.typography.titleSmall)
+                                        Text(context.getString(R.string.note_number, note.id), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_chevron_right), null,
+                                        Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                         }
                         items(rows, key = { it.first.id }) { (entry, depth) ->
                             EntryCard(
@@ -178,7 +192,17 @@ fun ChatScreen(
                     }
                     }
                     StatusBar(status.running?.lessonId == vm.lessonId, status.running != null, status.message, notice, vm)
-                    Composer(vm, practice, d.referenceNotes, d.templates, d.notebook?.defaultTemplateId, numbers, busy = status.running != null)
+                    // The composer is a rounded sheet resting on the bottom edge.
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                        shadowElevation = 6.dp,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Box(contentAlignment = Alignment.TopCenter) {
+                            Composer(vm, practice, d.referenceNotes, d.templates, d.notebook?.defaultTemplateId, numbers, busy = status.running != null)
+                        }
+                    }
                 }
             }
         }
@@ -299,20 +323,30 @@ fun EntryCard(
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val isUser = entry.kind == EntryKind.USER
+    // Speech-bubble corners: questions point up-right, replies point up-left at the avatar.
+    val shape = if (isUser) RoundedCornerShape(22.dp, 6.dp, 22.dp, 22.dp) else RoundedCornerShape(6.dp, 22.dp, 22.dp, 22.dp)
     Surface(
         color = when {
             highlighted -> MaterialTheme.colorScheme.tertiaryContainer
             isUser -> MaterialTheme.colorScheme.secondaryContainer
             else -> MaterialTheme.colorScheme.surface
         },
-        shape = MaterialTheme.shapes.medium,
+        shape = shape,
+        border = if (isUser || highlighted) null else softBorder(),
         modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth()
             .padding(start = 12.dp + (depth.coerceAtMost(2) * 8).dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (!isUser) WhaleAvatar(vm.lessonId)
-                Text(label(context, entry, number ?: entry.id.toInt()), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                val text = label(context, entry, number ?: entry.id.toInt())
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isUser) Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f), shape = CircleShape) {
+                        Text(text, Modifier.padding(horizontal = 10.dp, vertical = 3.dp), style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    } else Text(text, style = MaterialTheme.typography.labelLarge)
+                    if (entry.state == EntryState.PENDING) TypingDots()
+                }
                 if (entry.isRoot && practice && entry.mastery != null) FilterChip(
                     selected = entry.mastery == Mastery.MASTERED,
                     onClick = { if (!readOnly) vm.setMastery(entry.id, if (entry.mastery == Mastery.MASTERED) Mastery.UNMASTERED else Mastery.MASTERED) },
@@ -385,19 +419,27 @@ private fun AssistantActions(
     onAddToReview: ((Entry) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Soft tonal pills instead of outlines; the same actions and order as before.
+    val pad = PaddingValues(horizontal = 16.dp)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         when (entry.state) {
             EntryState.COMPLETE -> {
-                OutlinedButton(onClick = { vm.setTarget(entry.id, EntryAction.ASK) }) { Text(context.getString(R.string.follow_up)) }
-                OutlinedButton(onClick = { vm.setTarget(entry.id, EntryAction.EXPAND) }) { Text(context.getString(R.string.expand)) }
-                if (practice) OutlinedButton(onClick = { vm.setTarget(entry.id, EntryAction.MISTAKE) }) { Text(context.getString(R.string.mistake)) }
+                FilledTonalButton(onClick = { vm.setTarget(entry.id, EntryAction.ASK) }, contentPadding = pad) { Text(context.getString(R.string.follow_up)) }
+                FilledTonalButton(onClick = { vm.setTarget(entry.id, EntryAction.EXPAND) }, contentPadding = pad) { Text(context.getString(R.string.expand)) }
+                if (practice) FilledTonalButton(onClick = { vm.setTarget(entry.id, EntryAction.MISTAKE) }, contentPadding = pad) { Text(context.getString(R.string.mistake)) }
                 if (!practice && onAddToReview != null) {
-                    OutlinedButton(onClick = { onAddToReview(entry) }) { Text(context.getString(R.string.add_to_review)) }
+                    FilledTonalButton(
+                        onClick = { onAddToReview(entry) }, contentPadding = pad,
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ),
+                    ) { Text(context.getString(R.string.add_to_review)) }
                 }
             }
             EntryState.FAILED, EntryState.CANCELLED, EntryState.INTERRUPTED -> {
                 val user = all.firstOrNull { it.id == entry.parentEntryId }
-                if (user != null) OutlinedButton(onClick = { onRetry(user) }) { Text(context.getString(R.string.retry)) }
+                if (user != null) FilledTonalButton(onClick = { onRetry(user) }, contentPadding = pad) { Text(context.getString(R.string.retry)) }
             }
             else -> Unit
         }
@@ -412,8 +454,14 @@ private fun StatusBar(runningHere: Boolean, runningAnywhere: Boolean, message: S
         runningAnywhere -> context.getString(R.string.generating_elsewhere)
         else -> notice ?: message
     } ?: return
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    // A floating pill above the composer; bobbing dots while a reply is being written.
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Row(Modifier.padding(start = 16.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (runningAnywhere) TypingDots(color = MaterialTheme.colorScheme.onSecondaryContainer)
             Text(text, Modifier.weight(1f).padding(vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
             if (runningAnywhere) TextButton(onClick = vm::cancel) { Text(context.getString(R.string.cancel)) }
             else if (notice != null) TextButton(onClick = vm::dismissNotice) { Text(context.getString(R.string.dismiss)) }
@@ -451,8 +499,7 @@ private fun Composer(
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { vm.onCaptureResult(it) }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { vm.importPhotos(it) }
 
-    HorizontalDivider()
-    Column(Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (parentId > 0) {
             val mode = when (EntryAction.valueOf(action)) {
                 EntryAction.EXPAND -> context.getString(R.string.expand)

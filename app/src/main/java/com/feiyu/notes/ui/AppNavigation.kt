@@ -10,6 +10,7 @@ import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class ArchivedKey(val notebookId: Long, val lessonId: Long) : NavKey
 @Serializable data class ReviewListKey(val notebookId: Long) : NavKey
 @Serializable data object SettingsKey : NavKey
+@Serializable data object KeySettingsKey : NavKey
 @Serializable data object TemplatesKey : NavKey
 @Serializable data object SupportKey : NavKey
 
@@ -135,11 +137,13 @@ fun AppNavigation(initial: List<NavKey>) {
             entry<SettingsKey> {
                 SettingsScreen(
                     settings = app.apiSettings,
+                    onOpenKey = { backStack.add(KeySettingsKey) },
                     onOpenTemplates = { backStack.add(TemplatesKey) },
                     onOpenSupport = { backStack.add(SupportKey) },
                     navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), back) },
                 )
             }
+            entry<KeySettingsKey> { KeySettingsScreen(settings = app.apiSettings, onBack = back) }
             entry<TemplatesKey> { TemplateScreen(store = app.store, onBack = back) }
             entry<SupportKey> {
                 SupportScreen(vm = viewModel(factory = viewModelFactory { initializer { SupportViewModel(app) } }), onBack = back)
@@ -191,7 +195,8 @@ private fun Placeholder(text: String) {
     val context = LocalContext.current
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         androidx.compose.foundation.layout.Column(Modifier.then(Modifier), horizontalAlignment = Alignment.CenterHorizontally) {
-            WelcomeCard()
+            val features by context.app.prefs.features.collectAsStateWithLifecycle()
+            WelcomeCard(general = !features.study)
             Text(text)
         }
     }

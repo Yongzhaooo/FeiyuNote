@@ -28,15 +28,17 @@ object ContextBuilder {
         referenceNote: Entry?,
         template: Template?,
         resolvePhoto: (String) -> File,
-        base: String = StudyPrompts.SYSTEM,
+        language: String = "zh",
+        base: String = StudyPrompts.of(language).system,
     ): AiInput {
+        val set = StudyPrompts.of(language)
         require(target.kind == EntryKind.USER && target.action != null)
         val chain = ancestors(target, lessonEntries)
         val onChain = chain.associateBy { it.id }
 
         val history = recent(chain.mapNotNull { e ->
             when {
-                e.kind == EntryKind.USER -> AiMessage(AiRole.USER, e.text.ifBlank { StudyPrompts.PHOTO_ONLY_PLACEHOLDER })
+                e.kind == EntryKind.USER -> AiMessage(AiRole.USER, e.text.ifBlank { set.photoPlaceholder })
                 e.kind == EntryKind.ASSISTANT && e.state == EntryState.COMPLETE -> AiMessage(AiRole.ASSISTANT, e.text)
                 else -> null
             }
@@ -51,13 +53,14 @@ object ContextBuilder {
         }
 
         val text = when (target.action) {
-            EntryAction.ASK -> target.text.ifBlank { if (images.isNotEmpty()) StudyPrompts.IDENTIFY_AND_EXPLAIN else "" }
-            EntryAction.EXPAND -> listOf(StudyPrompts.EXPAND, target.text).filter { it.isNotBlank() }.joinToString("\n")
-            EntryAction.MISTAKE -> "${StudyPrompts.MISTAKE}\n我的解答：${target.text.ifBlank { StudyPrompts.PHOTO_ONLY_PLACEHOLDER }}"
+            EntryAction.ASK -> target.text.ifBlank { if (images.isNotEmpty()) set.identifyAndExplain else "" }
+            EntryAction.EXPAND -> listOf(set.expand, target.text).filter { it.isNotBlank() }.joinToString("\n")
+            EntryAction.MISTAKE -> "${set.mistake}\n${set.myAnswer}${target.text.ifBlank { set.photoPlaceholder }}"
         }
 
         val system = StudyPrompts.withTemplate(
-            StudyPrompts.withReference(base, referenceNote?.text),
+            set,
+            StudyPrompts.withReference(set, base, referenceNote?.text),
             template?.instruction,
         )
         return AiInput(system, history + AiMessage(AiRole.USER, text, images))
@@ -67,7 +70,8 @@ object ContextBuilder {
      * Summary of a lesson's completed Q&A, text only (spec §6). [lessonEntries] must already
      * exclude archived threads. Returns null when there is nothing completed to summarize.
      */
-    fun buildSummary(lessonEntries: List<Entry>, template: Template?, base: String = PromptKind.SUMMARY.default): Pair<AiInput, List<Long>>? {
+    fun buildSummary(lessonEntries: List<Entry>, template: Template?, language: String = "zh", base: String = PromptKind.SUMMARY.default(language)): Pair<AiInput, List<Long>>? {
+        val set = StudyPrompts.of(language)
         val answered = lessonEntries.filter { it.kind == EntryKind.ASSISTANT && it.state == EntryState.COMPLETE }
         if (answered.isEmpty()) return null
         val byId = lessonEntries.associateBy { it.id }
@@ -75,14 +79,14 @@ object ContextBuilder {
         val sources = mutableListOf<Long>()
         for (answer in answered) {
             val question = answer.parentEntryId?.let(byId::get) ?: continue
-            val parentNote = question.parentEntryId?.let { "，追问自 #$it" }.orEmpty()
-            lines += "[#${question.id} 问$parentNote] ${question.text.ifBlank { StudyPrompts.PHOTO_ONLY_PLACEHOLDER }}"
-            lines += "[#${answer.id} 答] ${answer.text}"
+            val parentNote = question.parentEntryId?.let { "${set.followUpFrom}$it" }.orEmpty()
+            lines += "[#${question.id} ${set.questionTag}$parentNote] ${question.text.ifBlank { set.photoPlaceholder }}"
+            lines += "[#${answer.id} ${set.answerTag}] ${answer.text}"
             sources += listOf(question.id, answer.id)
         }
         if (sources.isEmpty()) return null
-        val system = StudyPrompts.withTemplate(base, template?.instruction)
-        val input = AiInput(system, listOf(AiMessage(AiRole.USER, "本课问答如下：\n" + lines.joinToString("\n"))))
+        val system = StudyPrompts.withTemplate(set, base, template?.instruction)
+        val input = AiInput(system, listOf(AiMessage(AiRole.USER, set.lessonQa + "\n" + lines.joinToString("\n"))))
         return input to sources.distinct()
     }
 

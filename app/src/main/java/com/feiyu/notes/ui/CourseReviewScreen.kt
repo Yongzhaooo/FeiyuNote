@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -37,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +49,7 @@ import com.feiyu.notes.data.NotebookStore
 import com.feiyu.notes.data.ReviewInsertResult
 import com.feiyu.notes.data.ReviewRecord
 import com.feiyu.notes.data.ReviewStatus
+import com.feiyu.notes.ui.theme.LocalDarkTheme
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 import java.time.Instant
@@ -101,6 +104,7 @@ fun CourseReviewScreen(
                         Text(context.getString(R.string.new_review_record))
                     }
                 },
+                colors = feiyuTopBarColors(),
             )
         },
     ) { padding ->
@@ -144,14 +148,10 @@ fun CourseReviewScreen(
                 Box(
                     Modifier
                         .weight(1f)
-                        .padding(32.dp),
+                        .widthIn(max = 840.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        context.getString(R.string.review_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
+                    EmptyState(R.drawable.whale_02_09, context.getString(R.string.review_empty))
                 }
             } else {
                 LazyColumn(
@@ -279,7 +279,9 @@ private fun ReviewRecordCard(
         Modifier
             .fillMaxWidth()
             .testTag("review-record-${record.id}"),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = softBorder(),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // Header: Topic and Status Chip
@@ -301,17 +303,22 @@ private fun ReviewRecordCard(
                         ReviewStatus.UNDERSTOOD -> context.getString(R.string.status_understood)
                         ReviewStatus.CONFUSED -> context.getString(R.string.status_confused)
                     }
-                    val statusColor = when (record.status) {
-                        ReviewStatus.PENDING -> MaterialTheme.colorScheme.primary
-                        ReviewStatus.UNDERSTOOD -> MaterialTheme.colorScheme.tertiary
-                        ReviewStatus.CONFUSED -> MaterialTheme.colorScheme.error
+                    // Filled status pills: blue to review, rose when still confused, mint once understood.
+                    val dark = LocalDarkTheme.current
+                    val (statusContainer, statusLabel) = when (record.status) {
+                        ReviewStatus.PENDING -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+                        ReviewStatus.UNDERSTOOD ->
+                            if (dark) Color(0xFF1E5A3C) to Color(0xFFC9F2DA) else Color(0xFFD7F5E3) to Color(0xFF0E5C36)
+                        ReviewStatus.CONFUSED -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
                     }
 
                     SuggestionChip(
                         onClick = { statusMenu = true },
                         modifier = Modifier.testTag("record-status-chip"),
                         label = { Text(statusText) },
-                        colors = SuggestionChipDefaults.suggestionChipColors(labelColor = statusColor),
+                        shape = CircleShape,
+                        colors = SuggestionChipDefaults.suggestionChipColors(containerColor = statusContainer, labelColor = statusLabel),
+                        border = null,
                     )
 
                     DropdownMenu(expanded = statusMenu, onDismissRequest = { statusMenu = false }) {
@@ -372,7 +379,7 @@ private fun ReviewRecordCard(
                         Text(
                             context.getString(R.string.review_manual),
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.outline,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }

@@ -314,10 +314,7 @@ class UiFlowTest {
 
     @Test fun defaultTemplateAppliesToQuestionsNotSummaries() {
         click("设置")
-        scenario!!.onActivity { activity ->
-            assertTrue(activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE != 0)
-        }
-        click("讲解模板")
+        compose.onNodeWithText("讲解模板").performScrollTo().performClick()
         click("新建")
         compose.onNodeWithTag("text-input").performTextInput("严格")
         compose.onNodeWithTag("template-instruction").performTextInput("每步写出依据")
@@ -336,6 +333,53 @@ class UiFlowTest {
         click("开始整理")
         awaitAnswer("笔记正文")
         assertTrue("default template not used for summaries", !inputs.last().systemText.contains("每步写出依据"))
+    }
+
+    @Test fun keyPageIsTheOnlySecureScreenAndModelSavesKeepTheKey() {
+        click("设置")
+        waitText("还没有填写，先添加密钥才能提问哦")
+        assertSecure(false)
+        // The group sits near the top of Settings and copies its number.
+        compose.onNodeWithTag("settings-qq-group").assertIsDisplayed().assert(hasText("QQ 群：1079399140"))
+        compose.onNodeWithTag("settings-copy-group").performClick()
+        waitText("已复制")
+        shell("wm size 1080x2300")
+        screenshot("settings-phone")
+
+        compose.onNodeWithTag("open-key-settings").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("api-key").fetchSemanticsNodes().isNotEmpty() }
+        assertSecure(true)
+        compose.onNodeWithTag("save-key").assertIsNotEnabled()
+        compose.onNodeWithTag("api-key").performTextInput("sk-synthetic-ui-test")
+        hideKeyboard()
+        compose.onNodeWithTag("save-key").performClick()
+        waitText("密钥已保存")
+        assertTrue(app.apiSettings.hasKey())
+        // The typed key leaves the field once stored; the page never shows stored key text.
+        assertTrue(compose.onAllNodes(hasText("sk-synthetic-ui-test", substring = true)).fetchSemanticsNodes().isEmpty())
+        systemBack()
+        waitText("已配置，可以开始提问啦")
+        assertSecure(false)
+
+        // Saving the default model keeps the stored key.
+        compose.onNodeWithTag("model-id").performScrollTo().performTextClearance()
+        compose.onNodeWithTag("model-id").performTextInput("deepseek-ui-test")
+        hideKeyboard()
+        compose.onNodeWithTag("save-model").performScrollTo().performClick()
+        waitText("已保存")
+        assertEquals("deepseek-ui-test", app.apiSettings.model())
+        assertTrue(app.apiSettings.hasKey())
+
+        // Clearing asks first, keeps the model, and the status card follows.
+        compose.onNodeWithTag("open-key-settings").performScrollTo().performClick()
+        compose.onNodeWithTag("clear-key").performScrollTo().performClick()
+        click("确定")
+        waitText("已清除密钥")
+        assertTrue(!app.apiSettings.hasKey())
+        assertEquals("deepseek-ui-test", app.apiSettings.model())
+        systemBack()
+        waitText("还没有填写，先添加密钥才能提问哦")
+        assertSecure(false)
     }
 
     @Test fun archiveRestoreAndDeleteThread() {
@@ -460,7 +504,7 @@ class UiFlowTest {
         val entries = runBlocking { app.store.readEntries(com.feiyu.notes.data.NotebookStore.GENERAL_ID) }
         assertEquals(entries.first { it.kind == EntryKind.ASSISTANT }.id, entries.last { it.kind == EntryKind.USER }.parentEntryId)
         assertEquals(3, inputs.last().messages.size)
-        assertTrue(inputs.last().systemText.contains("通用助手"))
+        assertTrue(inputs.last().systemText.contains("鱼鱼"))
         assertEquals(listOf("deepseek-flash" to "low", "deepseek-flash" to "low"), configs.map { it.model to it.effort })
         listOf("提问 #1", "DeepSeek · 回答 #1", "追问 #2", "DeepSeek · 回答 #2").forEach(::waitText)
 
@@ -477,6 +521,73 @@ class UiFlowTest {
         awaitAnswer("答案3")
         assertEquals("high", configs.last().effort)
         screenshot("general-chat-phone")
+    }
+
+    /** README screenshots with tidy demo content; runs only with `-e showcase true`. */
+    @Test fun showcaseScreenshots() {
+        org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("showcase") == "true")
+        shell("wm size 1080x2300")
+        app.prefs.setTheme(com.feiyu.notes.settings.ThemeMode.LIGHT)
+        createNotebook("新建课程", "高等数学")
+        createNotebook("新建课程", "大学物理")
+        createNotebook("新建刷题本", "线代错题本")
+        screenshot("showcase-home")
+
+        click("高等数学")
+        click("新课次")
+        mathReply = "核心结论：当 \\(x\\to 0\\) 时，\\(\\sin x\\) 和 \\(x\\) 几乎一样大，所以比值趋于 1。\n" +
+            "第一步，在单位圆里比较面积，可以得到 \\(\\sin x < x < \\tan x\\)（\\(0<x<\\frac{\\pi}{2}\\)）。\n" +
+            "第二步，同除以 \\(\\sin x\\) 并取倒数：\n\\[\\cos x < \\frac{\\sin x}{x} < 1\\]\n" +
+            "第三步，\\(\\cos x\\to 1\\)，由夹逼定理得\n\\[\\lim_{x\\to 0}\\frac{\\sin x}{x}=1\\]\n" +
+            "易错点：这里的 \\(x\\) 必须用弧度。"
+        ask("为什么 sin x / x 在 x→0 时极限是 1？")
+        waitSubstring("易错点")
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("math-display", useUnmergedTree = true).fetchSemanticsNodes().size == 2 }
+        compose.waitUntil(15_000) { app.generator.status.value.running == null }
+        screenshot("showcase-study-chat")
+        systemBack()
+        systemBack()
+
+        waitText("一起来聊天吧")
+        compose.onNodeWithTag("general-chat").performClick()
+        mathReply = "用户酱辛苦啦，先抱抱～ (｡•ᴗ•｡)\n" +
+            "连着上了一整天课，累是很正常的，不是你不够努力哦。今晚不如先把最卡的那一个知识点记下来，剩下的明天再说。\n" +
+            "要不要跟鱼鱼说说，今天哪一节课最让你头大？"
+        ask("今天好累，感觉什么都没学进去")
+        waitSubstring("要不要跟鱼鱼说说")
+        compose.waitUntil(15_000) { app.generator.status.value.running == null }
+        screenshot("showcase-yuyu-chat")
+        systemBack()
+
+        click("设置")
+        waitText("交流群")
+        screenshot("showcase-settings")
+        systemBack()
+
+        app.prefs.setTheme(com.feiyu.notes.settings.ThemeMode.DARK)
+        waitText("高等数学")
+        screenshot("showcase-home-dark")
+    }
+
+    @Test fun chatOrStudyCanBeTurnedOffButNotBoth() {
+        waitText("新建课程")
+        compose.onNodeWithTag("general-chat").assertExists()
+        click("设置")
+        compose.onNodeWithTag("feature-study").performScrollTo().performClick()
+        // The last feature left on is locked.
+        compose.onNodeWithTag("feature-chat").performScrollTo().assertIsNotEnabled()
+        systemBack()
+        waitText("一起来聊天吧")
+        assertTrue(compose.onAllNodesWithText("新建课程").fetchSemanticsNodes().isEmpty())
+        assertTrue(compose.onAllNodesWithText("一起把知识弄明白").fetchSemanticsNodes().isEmpty())
+
+        click("设置")
+        compose.onNodeWithTag("feature-study").performScrollTo().performClick()
+        compose.onNodeWithTag("feature-chat").performScrollTo().performClick()
+        systemBack()
+        waitText("新建课程")
+        assertTrue(compose.onAllNodesWithTag("general-chat").fetchSemanticsNodes().isEmpty())
+        assertEquals(com.feiyu.notes.settings.Features(chat = false, study = true), app.prefs.features.value)
     }
 
     @Test fun advancedSettingsOverrideBuiltInPromptAndExplainSkills() {
@@ -502,7 +613,7 @@ class UiFlowTest {
         awaitAnswer("答案1")
         assertTrue(inputs.last().systemText.startsWith("自定义公共提示"))
         app.prefs.setPrompt(com.feiyu.notes.study.PromptKind.GENERAL, null)
-        assertEquals(com.feiyu.notes.study.PromptKind.GENERAL.default, app.prefs.prompt(com.feiyu.notes.study.PromptKind.GENERAL))
+        assertEquals(com.feiyu.notes.study.PromptKind.GENERAL.default("zh"), app.prefs.prompt(com.feiyu.notes.study.PromptKind.GENERAL, "zh"))
     }
 
     @Test fun helpScreenChecksUpdatesAndRetriesFeedbackWithTheSameIdAcrossRecreation() {
@@ -514,7 +625,7 @@ class UiFlowTest {
         }
         app.checkUpdate = { _, _, _ -> UpdateResult.Available("9.9.9", "更新说明示例", "https://feiyunote.cangming.fyi/feiyu/") }
         openSupport()
-        waitText("QQ 群：1079399140")
+        compose.onNodeWithTag("qq-group").performScrollTo().assert(hasText("QQ 群：1079399140"))
         compose.onNodeWithTag("check-update").performScrollTo().performClick()
         waitText("发现新版本 9.9.9")
         waitText("更新说明示例")
@@ -794,6 +905,13 @@ class UiFlowTest {
         waitText("可恢复的主题")
     }
 
+
+    private fun assertSecure(expected: Boolean) {
+        compose.waitForIdle()
+        scenario!!.onActivity { activity ->
+            assertEquals(expected, activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_SECURE != 0)
+        }
+    }
 
     private fun waitSubstring(text: String) =
         compose.waitUntil(10_000) { compose.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty() }

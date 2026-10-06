@@ -8,7 +8,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,11 +20,14 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -33,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
@@ -98,6 +104,7 @@ fun NoteScreen(
             TopAppBar(
                 title = { Text(context.getString(R.string.note_number, noteId)) },
                 navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), onBack) },
+                colors = feiyuTopBarColors(),
             )
         },
     ) { padding ->
@@ -116,9 +123,12 @@ fun NoteScreen(
                 label = { Text(context.getString(R.string.note_content)) },
                 minLines = 8,
                 modifier = Modifier.fillMaxWidth().testTag("note-editor"),
-            ) else MathContent(text.orEmpty())
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { editing = !editing }) {
+            ) else Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, border = softBorder()) {
+                // The note reads like a sheet of paper on the pale page.
+                Box(Modifier.fillMaxWidth().padding(20.dp)) { MathContent(text.orEmpty()) }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                FilledTonalButton(onClick = { editing = !editing }) {
                     Text(context.getString(if (editing) R.string.preview_note else R.string.edit_note))
                 }
                 Button(enabled = dirty, onClick = {
@@ -151,20 +161,25 @@ fun NoteScreen(
                         Text(context.getString(R.string.add_to_review))
                     }
                 }
-                OutlinedButton(onClick = { confirmDelete = true }) { Text(context.getString(R.string.delete_note)) }
+                TextButton(onClick = { confirmDelete = true }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                    Text(context.getString(R.string.delete_note))
+                }
             }
             if (dirty) Text(context.getString(R.string.unsaved_note), style = MaterialTheme.typography.bodySmall)
             message?.let { Text(it) }
-            Text(context.getString(R.string.sources), style = MaterialTheme.typography.titleSmall)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                IconBadge(R.drawable.ic_book, Accent.SEA, size = 28.dp)
+                Text(context.getString(R.string.sources), style = MaterialTheme.typography.titleSmall)
+            }
             val (ids, byId) = sources ?: (emptyList<Long>() to emptyMap())
-            if (ids.isEmpty()) Text(context.getString(R.string.none), style = MaterialTheme.typography.bodySmall)
+            if (ids.isEmpty()) Text(context.getString(R.string.none), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             ids.forEach { id ->
                 val source = byId[id]
                 Text(
                     text = if (source == null) context.getString(R.string.deleted_source, id) else "#$id ${source.text.take(40).ifBlank { context.getString(R.string.photo_placeholder) }}",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = if (source == null) Modifier else Modifier.clickable { onOpenSource(id) },
-                    color = if (source == null) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
+                    color = if (source == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
                 )
             }
         }

@@ -86,7 +86,6 @@
     <string name="photo_placeholder">（照片）</string>
     <string name="delete_note_title">删除这条笔记？</string>
     <string name="delete_note_body">只删除这条笔记，不影响问答。</string>
-    <string name="key_configured">DeepSeek API Key：已配置</string>
     <string name="key_missing">DeepSeek API Key：未配置</string>
     <string name="replace_key">输入新 Key 以替换</string>
     <string name="clear_key">清除 Key</string>
@@ -114,7 +113,7 @@
     <string name="selected_photos">附上原图：已选 %1$d 张</string>
     <string name="reference_selected">参考：笔记 #%1$d</string>
     <string name="new_session">新%1$s</string>
-    <string name="sessions_empty">还没有%1$s，点右上角新建。</string>
+    <string name="sessions_empty">还没有%1$s，点右下角的按钮新建一个吧。</string>
     <string name="rename_session">重命名%1$s</string>
     <string name="delete_named">删除「%1$s」？</string>
     <string name="new_notebook">新建%1$s</string>
@@ -133,8 +132,22 @@
     <string name="welcome_title">一起把知识弄明白</string>
     <string name="welcome_short">拍下问题，聊透思路，留下自己的笔记。</string>
     <string name="welcome_body">输入问题，或拍照、从相册选图。和 DeepSeek 一起梳理思路，再把问答整理成复习笔记。</string>
-    <string name="deepseek_connection">连接 DeepSeek</string>
-    <string name="key_private">Key 仅加密保存在本机。留空可保留现有 Key。</string>
+    <string name="key_private">Key 只加密保存在本机。测试连接会使用这里输入的 Key，点「保存」后才会存下。</string>
+    <string name="key_settings">DeepSeek 密钥</string>
+    <string name="key_ready">已配置，可以开始提问啦</string>
+    <string name="key_needed">还没有填写，先添加密钥才能提问哦</string>
+    <string name="key_hero_body">密钥加密保存在本机，不会出现在笔记、导出或日志里；本页禁止截屏。</string>
+    <string name="enter_key">填写密钥</string>
+    <string name="change_key">更换密钥</string>
+    <string name="key_saved">密钥已保存</string>
+    <string name="key_cleared">已清除密钥</string>
+    <string name="clear_key_title">清除已保存的密钥？</string>
+    <string name="clear_key_body">清除后需要重新填写才能提问，笔记和问答不受影响。</string>
+    <string name="ai_section">AI 讲解</string>
+    <string name="default_model">默认模型与推理强度</string>
+    <string name="default_model_hint">新会话默认使用这里的设置；每个会话也可以在输入框上方单独调整。</string>
+    <string name="templates_hint">给 DeepSeek 的讲解要求，提问时可以选用</string>
+    <string name="support_hint">检查更新和反馈问题</string>
     <string name="api_guide_title">如何获取 API Key？</string>
     <string name="api_guide">1. 打开 DeepSeek 开放平台并登录。\n2. 在「API keys」中创建并复制 Key。\n3. 粘贴到上方，点击保存。\nAPI 按使用量计费；请在平台检查余额与价格。</string>
     <string name="open_deepseek">打开 DeepSeek 开放平台</string>
@@ -145,7 +158,7 @@
     <string name="avatar_saved">头像已更新</string>
     <string name="avatar_reset">已恢复每个课次的随机头像</string>
     <string name="avatar_failed">无法读取这张图片，请选择有效图片（不超过 32 MB）。原头像已保留。</string>
-    <string name="about">关于与署名</string>
+    <string name="about">关于</string>
     <string name="language_auto">语言跟随系统：中文使用中文，其余语言使用英语。</string>
     <string name="art_credit">鲸鱼娘人设：上善无形、ZipZipPipe。表情包：小红书 Hidcote，含 AI 生成内容。</string>
     <string name="font_license">查看字体许可证</string>
@@ -169,7 +182,7 @@
     <string name="photos_missing_count">有 %1$d 张附带的照片已不存在，请重新选择</string>
     <string name="question_required">请输入问题或拍一张照片</string>
     <string name="generation_failed">生成失败，请重试。已保存的内容不会丢失。</string>
-    <string name="error_key">未设置 DeepSeek API Key，请在设置中添加。</string>
+    <string name="error_key">未设置 DeepSeek API Key，请到「设置 › DeepSeek 密钥」添加。</string>
     <string name="error_auth">认证失败（HTTP %1$d），请检查 API Key。</string>
     <string name="error_quota">额度不足或请求过于频繁（HTTP %1$d），请检查余额或稍后重试。</string>
     <string name="error_large">请求超出接口限制，请减少内容或图片后重试。</string>
@@ -217,7 +230,7 @@
     <string name="connection_auth_failed">认证失败，请检查 API Key。</string>
     <string name="testing_connection">测试中…</string>
     <string name="test_connection">测试连接 / 刷新模型</string>
-    <string name="connection_scope">仅检查认证和模型列表，不发起聊天请求。输入的新 Key 需点击保存才会保存。</string>
+    <string name="connection_scope">仅检查认证和模型列表，不发起聊天请求。</string>
     <string name="text_only_model">此模型未声明支持图片；发送照片时请选择其他模型。</string>
     <string name="jump_to_question">跳到提问 #%1$d：%2$s</string>
     <string name="general_chat_tag">一起来聊天吧</string>
@@ -325,7 +338,7 @@
     <string name="share_feedback_title">分享反馈</string>
     <string name="share_unavailable">没有可接收的应用，已复制到剪贴板。</string>
     <string name="share_handed_off">已交给其他应用，是否发出请在该应用中确认。</string>
-    <string name="discussion_title">讨论群</string>
+    <string name="discussion_title">交流群</string>
     <string name="qq_group">QQ 群：%1$s</string>
     <string name="qq_group_hint">可选的交流渠道。遇到问题请优先用上面的反馈提交。</string>
     <string name="copy_group_number">复制群号</string>
@@ -333,4 +346,9 @@
     <string name="crash_body">已在本机保存一份最小诊断记录，不会自动上传。可以查看后反馈，也可以忽略。</string>
     <string name="crash_view">查看并反馈</string>
     <string name="crash_ignore">忽略</string>
+    <string name="features_section">功能</string>
+    <string name="group_card_hint">和大家一起聊学习、提建议、第一时间看到新版本～</string>
+    <string name="features_hint">不需要的部分可以关掉，至少保留一项；已有数据都会保留。</string>
+    <string name="feature_chat">聊天</string>
+    <string name="feature_study">学习</string>
 </resources>

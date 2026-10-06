@@ -14,6 +14,10 @@ data class DisplayPreferences(
     val textSize: TextSize = TextSize.STANDARD,
 )
 
+data class Features(val chat: Boolean = true, val study: Boolean = true) {
+    fun normalized() = if (!chat && !study) Features() else this
+}
+
 /** Plain UI preferences; not part of the notebook database. */
 class AppPrefs(context: Context, name: String = NAME) {
     private val prefs = context.getSharedPreferences(name, Context.MODE_PRIVATE)
@@ -35,17 +39,30 @@ class AppPrefs(context: Context, name: String = NAME) {
         _display.value = value
     }
 
-    fun prompt(kind: com.feiyu.notes.study.PromptKind): String =
-        prefs.getString("prompt_${kind.name}", null)?.takeIf { it.isNotBlank() } ?: kind.default
+    fun prompt(kind: com.feiyu.notes.study.PromptKind, language: String): String =
+        prefs.getString("prompt_${kind.name}", null)?.takeIf { it.isNotBlank() } ?: kind.default(language)
 
     fun isPromptCustom(kind: com.feiyu.notes.study.PromptKind): Boolean = prefs.contains("prompt_${kind.name}")
 
-    /** Blank or unchanged text restores the built-in default. */
+    /** Blank text or either built-in language's default restores the built-in default, so it keeps following the language. */
     fun setPrompt(kind: com.feiyu.notes.study.PromptKind, text: String?) {
         val value = text?.trim().orEmpty()
         prefs.edit().apply {
-            if (value.isEmpty() || value == kind.default) remove("prompt_${kind.name}") else putString("prompt_${kind.name}", value)
+            if (value.isEmpty() || value == kind.default("zh") || value == kind.default("en")) remove("prompt_${kind.name}")
+            else putString("prompt_${kind.name}", value)
         }.apply()
+    }
+
+    /** Which halves of the app are on. At least one stays on; a stored "both off" falls back to both on. */
+    private val _features = MutableStateFlow(
+        Features(prefs.getBoolean("chat_enabled", true), prefs.getBoolean("study_enabled", true)).normalized(),
+    )
+    val features = _features.asStateFlow()
+
+    fun setFeatures(value: Features) {
+        val safe = value.normalized()
+        prefs.edit().putBoolean("chat_enabled", safe.chat).putBoolean("study_enabled", safe.study).apply()
+        _features.value = safe
     }
 
     private val _modelRevision = MutableStateFlow(0L)
