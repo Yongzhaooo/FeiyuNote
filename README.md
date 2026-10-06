@@ -12,13 +12,25 @@
 
 前往 [Releases](https://github.com/Yongzhaooo/FeiyuNote/releases) 下载预览版 APK，支持 Android 8.0 及以上。
 
-1. 安装后打开「设置」。
-2. 在 [DeepSeek 开放平台](https://platform.deepseek.com/api_keys) 创建 API Key 并存入应用。API 按使用量计费，请自行检查平台余额与价格。
+1. 安装后打开「设置」，点顶部的「DeepSeek 密钥」。
+2. 在 [DeepSeek 开放平台](https://platform.deepseek.com/api_keys) 创建 API Key，粘贴到密钥页并保存。API 按使用量计费，请自行检查平台余额与价格。
 3. 新建课程和课次，输入问题、拍照或从相册选图后发送；需要复习时点击「整理本课」。
 
 笔记、照片和对话保存在设备本地。发起模型请求时，所选问题、上下文和图片会发送给 DeepSeek。
 
-API Key 使用 AES-256-GCM 加密存入私有目录，加密密钥由 Android Keystore 管理且不可导出。凭据不参与备份或设备迁移；设置页防截图、录屏，发布 APK 不可调试。密文损坏或 Keystore 密钥丢失后需重新输入 Key。
+API Key 使用 AES-256-GCM 加密存入私有目录，加密密钥由 Android Keystore 管理且不可导出。凭据不参与备份或设备迁移；输入 Key 的密钥页防截图、录屏，发布 APK 不可调试。密文损坏或 Keystore 密钥丢失后需重新输入 Key。
+
+## 界面预览
+
+<p>
+<img src="docs/screenshots/0.4/home.png" width="180" alt="首页">
+<img src="docs/screenshots/0.4/study-chat.png" width="180" alt="课程问答与公式">
+<img src="docs/screenshots/0.4/yuyu-chat.png" width="180" alt="和鱼鱼聊天">
+<img src="docs/screenshots/0.4/settings.png" width="180" alt="设置">
+<img src="docs/screenshots/0.4/home-dark.png" width="180" alt="深色首页">
+</p>
+
+截图中的课程与回答为演示内容，由测试中的模拟回答生成。
 
 ## 界面与特性
 
@@ -30,6 +42,7 @@ API Key 使用 AES-256-GCM 加密存入私有目录，加密密钥由 Android Ke
 
 ## 版本更新
 
+- **[0.4.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.4.0)**：界面换成鲸鱼娘配色，卡片圆润，浅色和深色都重新调过；空列表配贴纸，生成回答时显示跳动的小点，新建课次改为右下角按钮。DeepSeek 密钥单独成页，只有这一页禁止截屏；设置首页顶部显示密钥状态和交流群（QQ 群 1079399140，可一键复制）。可以单独关掉聊天或学习：只留聊天时首页只剩公共聊天。公共聊天的助手换成软萌体贴的“鱼鱼”，称呼你为“用户酱”。内置提示词和未修改的“引导式讲解”模板随应用语言使用中文或英文。独立下载页同步换新，并展示交流群。
 - **[0.3.3](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.3)**：课程新增复习记录。可从已完成的问答或笔记「加入复习」，也可手工新增；支持编辑、删除、按状态筛选，标记「待复习」「已理解」「仍有疑问」，并回到来源。来源删除后保留复习文字并标明来源已删除。记录按课程隔离，全部操作在本地完成，不额外调用模型。
 - **[0.3.2](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.2)**：设置新增“关于与帮助”，可手动检查更新并打开[独立下载页](https://feiyunote.cangming.fyi/feiyu/)，不需要访问 GitHub。应用内可以反馈问题：可选附带诊断信息，提交前预览，成功后显示反馈编号，失败时保留草稿并可重试，离线时可以分享或复制；反馈页提供 QQ 讨论群 1079399140。本机保存有上限的诊断记录，不含 Key、聊天和笔记，不自动上传；意外退出后，下次启动会提示。模型标签缩短为 `dsf.low` 这类形式，公共聊天改为“整理对话”，长对话只发送最近部分的历史。
 - **[0.3.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.1)**：首页新增“一起来聊天吧”公共聊天卡片，无需建课即可随手问，进入后显示专属横幅；欢迎卡片和公共聊天卡片的插图都可在设置中换成自己的图片。默认模型 DeepSeek V4.1 Flash，推理强度提供官方 low/high/max 三档（默认 low），可在设置中改默认值，也可在每个会话单独调整；设置页可测试连接。预装“引导式讲解”模板，新建笔记本默认使用。设置新增“高级”：可修改内置提示词，也可通过 GitHub 链接安装 Skill（只读取 SKILL.md 的文字说明作为讲解模板，不运行任何代码）。问答按会话顺序编号，提问 N 对应回答 N；长会话右侧提供跳转节点。新增语言、日夜和字号设置，修复字体过细。
@@ -38,6 +51,11 @@ API Key 使用 AES-256-GCM 加密存入私有目录，加密密钥由 Android Ke
 - **[0.1.0-alpha.1](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.1.0-alpha.1)**：课程/课次问答、刷题本、笔记整理与导出；中英界面、鲸鱼头像与自适应布局。
 
 ## 后续方向
+
+待做：
+
+- 鲸鱼娘表情包（头像与贴纸）还没有打标签，目前按随机抽取，和场景、情绪对不上；计划给图片加标签，按用途挑选。
+- 考虑允许用户自定义“鱼鱼”的头像。
 
 近期候选：改善回答中 Markdown 格式的显示，清理未发送图片的残留文件，补齐真实折叠屏验证。较远期考虑讲解模板扩展和随机抽取复习卡片；尚无固定排期，范围通过 Issue 讨论后确定。
 

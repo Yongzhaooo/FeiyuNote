@@ -12,7 +12,7 @@
 | 导航 | `K/ui/AppNavigation.kt` | 导航键只传笔记本、课次、条目 ID；`ListDetailSceneStrategy` 支持单双栏，`BackNavigationBehavior.PopLatest` 保证双栏返回时逐级退栈。 |
 | 数据 | `K/data/Models.kt`、`NotebookDatabase.kt`、`NotebookStore.kt` | 单库四表；按笔记本/课次限定查询，写入入口校验归档与掌握状态。事务成功后递增 `changes: StateFlow<Long>` 供页面重读；删除事务成功后再清理图片。数据库 v2 将旧单图迁移为有序图片列表；字段与失效引用规则见 spec §5。 |
 | 附件 | `K/data/PhotoFiles.kt` | 只分配、解析和删除私有 `images/<notebookId>/` 内的文件，拒绝含路径分隔符的文件名。 |
-| 凭据 | `K/settings/ApiSettings.kt` | 固定 endpoint；API Key 以 AES-256-GCM 加密，Keystore 中的加密密钥不可导出。完整配置只由 `Generator` 读取；设置页只读取模型名和 Key 是否存在，明文不进入笔记库、导出或日志。 |
+| 凭据 | `K/settings/ApiSettings.kt` | 固定 endpoint；API Key 以 AES-256-GCM 加密，Keystore 中的加密密钥不可导出。完整配置只由 `Generator` 读取；设置首页与密钥页（`K/ui/KeySettingsScreen.kt`）只读取模型名和 Key 是否存在，明文不进入笔记库、导出或日志。 |
 | 界面状态 | `K/settings/AppPrefs.kt`、`K/study/StudyViewModel.kt` | `AppPrefs.lastLesson: Pair<Long, Long>?` 保存笔记本与课次 ID，失效时清空；另保存课次头像索引。ViewModel 持有选择、草稿、附件等界面状态，不持有请求任务；数据变化、发送和重试前重新校验引用。 |
 | 模型客户端 | `K/ai/AiTypes.kt`、`DeepSeekClient.kt` | 注入配置与 OkHttpClient，不读取设置；只允许 user 消息带图，缩放压缩为 JPEG 后编码；返回最终正文，区分认证、限流、网络、空回答与超限错误。协程取消传递到 HTTP 请求，不自动重试。 |
 | 上下文 | `K/study/ContextBuilder.kt`、`StudyPrompts.kt` | 纯函数按已保存 user 条目的 action、父链、附件与引用组装请求；不另建一份请求输入。普通问答与整理沿用 spec §6 的不同上下文范围。 |
@@ -256,3 +256,28 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 - 发布提交 `0d9a86c6555c79e9affc585b438f17f541c9b707` 已推送到 main，标签 `v0.3.3` 指向该提交。[main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/37472672999) 与 [tag 构建、单测及签名发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/37472673231) 均通过；[GitHub 预览版](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.3) 已发布。
 - 下载实际 Release 产物 `build/release-v0.3.3/feiyu-notes-v0.3.3.apk` 验签通过，0.3.3 / 8、minSdk 26、debuggable=false，证书与 0.3.2 一致。其 SHA-256 为 `2285f71387e314a85061476f08bd313c6c20ca338eb75a25010f6dfd8ced0c6e`；本地构建与远端构建的 APK 字节不同，公开双渠道统一使用远端 Release 产物。
 - 同一 Release APK 已用 `scripts/publish-download.ps1` 发布至 `yz_vps:/srv/feiyunote`，更新索引最后原子切换。线上 [下载页](https://feiyunote.cangming.fyi/feiyu/) 和 APK 下载均为 HTTP 200，APK MIME 正确，实际下载 SHA-256 与 Release 相同；[更新索引](https://feiyunote.cangming.fyi/updates/android.json) 为 0.3.3 / 8、minSdk 26、正确下载页地址，Cache-Control 为 no-cache。
+
+## 设置拆分与界面风格（2026-10-06，未发布）
+
+日期：2026-10-06。基线 `dc2e306`（main），分支 `feat/settings-split-cute-ui`，改动尚未提交。产品行为见 [spec](spec.md#设置拆分与界面风格2026-10-06)。
+
+- 实现：新增 `K/ui/KeySettingsScreen.kt` 与导航键 `KeySettingsKey`，FLAG_SECURE 从设置首页移到密钥页。保存或清除 Key 仍调用 `ApiSettings.save`，并传入当前模型与推理强度；设置首页“AI 讲解”用 `save(null, …)` 只保存模型，不动 Key。新增 `K/ui/Decor.kt`，集中放置配色徽章、贴纸、泡泡和打字点等共用组件；`theme/Theme.kt` 换成鲸鱼娘配色与更圆的形状，另加 12 个线性图标。
+- 新建课次改为浮动按钮，使用带内容插槽的 `ExtendedFloatingActionButton`。带 `text`/`icon` 参数的写法不会把标签放进无障碍树，界面测试和读屏都找不到它。
+- 测试：`UiFlowTest` 新增 `keyPageIsTheOnlySecureScreenAndModelSavesKeepTheKey`，覆盖设置首页可截屏、密钥页禁止截屏且离开后恢复、合成 Key 保存后不显示明文、保存默认模型不清除 Key、清除 Key 需确认且不改模型、返回设置后状态卡同步。原 FLAG_SECURE 断言移入该用例，模板入口改为先滚动再点击；CI 截图清单增加 `home-general-chat`、`settings-phone`。
+- 验证：`scripts/ci.ps1 -Full` 通过，JVM 单测 76 项；设备 runner 56 项（55 通过、1 跳过即默认关闭的真实 API 冒烟、0 失败），涵盖 6 个测试类，11 张截图已提取并检查。首轮 `-Full` 因浮动按钮标签不在无障碍树中失败 14 项（13 项卡在点击“新课次”，1 项为连带失败），修复后重跑全部通过。之后只改了笔记页提示文字颜色和 import 顺序，快速 `scripts/ci.ps1` 通过。
+- 模拟器人工检查（1080x2300）：浅色与深色的首页、课次列表、空状态、设置首页和密钥页。密钥页的 `adb screencap` 为全黑，说明禁止截屏生效，页面效果改用模拟器宿主截图查看。检查后已删除演示数据，并恢复主题和分辨率。
+- 产物：debug APK `dist/feiyu-notes-0.3.3-dc2e306-dirty-debug.apk`，SHA-256 `4de32414a6bcc408e6058cb657b81f2102fc447ec0f50d94710139218e15add9`；未改版本号，未做签名 release。
+- 平板预览：经用户同意，用正式签名在本地打包 `app/build/outputs/apk/release/app-release.apk`（SHA-256 `2bfecce7bbfb7e1619415b27fa4428057124d3a2de9257fc9007b57c224bd3a0`，证书 `10caccf5…d88b` 与已发布版本一致，版本仍显示 0.3.3 / 8，不可调试），已在 TB321FU 上从 0.3.1 原地覆盖安装：首次安装时间不变，启动后在前台运行，崩溃日志为空。该 APK 未复制到 `dist/`，也未发布；观感待用户确认。
+- 未执行：真实折叠态、真实 DeepSeek 请求，以及提交、推送和发布。
+- 追加（同分支）：提示词按语言加载、聊天/学习开关、公共聊天“鱼鱼”人设。`StudyPrompts.kt` 改为 `PromptSet` 中英两套，`StudyPrompts.of(language)` 取用，`PromptKind.default(language)`；`ContextBuilder.buildTurn`/`buildSummary` 增加 `language` 参数；`Generator` 按 `AppLanguage` 取语言，并对未编辑的预装引导式模板调用 `localizedTemplate`。`AppPrefs.prompt(kind, language)`，`setPrompt` 收到任一语言的默认文字时删除覆盖值；新增 `Features(chat, study)`，键为 `chat_enabled` / `study_enabled`，读到两项都关时按都开处理。界面改动在 `SettingsScreen.kt`（`FeatureSettings`）、`NotebookListScreen.kt` 和 `MainActivity.startStack`。测试：`ContextBuilderTest.builtInPromptsFollowTheLanguage`；`UiFlowTest` 新增 `chatOrStudyCanBeTurnedOffButNotBoth`，公共聊天用例的人设断言改为“鱼鱼”。验证：JVM 单测 77 项通过；`scripts/ci.ps1 -Full` 在改断言前跑了一轮，56 项中 2 项失败：一项是预期的“通用助手”旧断言，另一项是 `courseReviewArchivedAndEditDeleteWorkflow` 在等第一条回答时超时（与本次改动无关）。修复后重建 APK，单独重跑这两项、新增的开关用例和高级提示词用例，4 项全部通过。平板 TB321FU 已覆盖安装新的正式签名 release（SHA-256 `b922b78ce1709ffc88bfb61b0d19d49998da39756c61af811a57e879729a446b`，证书同上），首次安装时间不变，启动正常。
+- 追加：关闭学习时首页和平板右侧空白栏不再显示学习欢迎卡片。设置首页新增交流群卡片（`GroupCard`，testTag `settings-qq-group` / `settings-copy-group`），`discussion_title` 中文改为“交流群”。`keyPageIsTheOnlySecureScreenAndModelSavesKeepTheKey` 增加群号显示与复制断言；帮助页用例改为按 `qq-group` 标签断言。相关 5 项界面用例在模拟器上通过。平板再次覆盖安装 release（SHA-256 `44570843557edf55a334232c105858f4b37c7ff52f479630ed62917606b8bb7a`，证书不变），启动正常。
+- 下载页：`site/feiyu/index.html` 改为鲸鱼娘配色和鱼鱼问候，新增交流群卡片（复制按钮带降级）。经用户要求，只更新了线上页面：用线上 0.3.3 APK 和更新说明在本地渲染，确认 SHA-256、大小、文件名与线上一致；再把 `index.html` 原子替换到 `yz_vps:/srv/feiyunote/feiyu/`，旧页备份为 `index.html.bak-20261006`。APK 和 `updates/android.json` 未改动。线上页面 HTTP 200，内容哈希与本地渲染一致，APK 链接 200。模拟器 Chrome 中按 1080x2300 检查过排版，深色模式未看。
+
+## 0.4.0 发布
+
+日期：2026-10-06。基线 `dc2e306`（main），功能提交 `b8bba05`（分支 `feat/settings-split-cute-ui`，快进合入 main）。版本 0.4.0 / versionCode 9，数据库仍为 v4，没有迁移。内容见上方“设置拆分与界面风格”一节及其追加记录。
+
+- 用户在 TB321FU 上试用覆盖安装的预览包后确认发布。
+- README 新增界面预览：五张截图由新增的 `UiFlowTest.showcaseScreenshots` 在 1080x2300 模拟器上生成（仅 `-e showcase true` 时运行，平时跳过），缩到 540 宽后放在 `docs/screenshots/0.4/`。截图内容为模拟回答生成的演示数据。README 待做新增：贴纸未打标签导致随机性过强；考虑允许自定义鱼鱼头像。
+- 本地验证：`scripts/ci.ps1 -Full` 通过，设备 runner 58 项（56 通过、2 跳过：展示截图和默认关闭的真实 API 冒烟，0 失败），6 个测试类；JVM 单测 77 项通过。
+- 未执行：真实 DeepSeek 请求、真实折叠态、深色模式下的下载页检查。
