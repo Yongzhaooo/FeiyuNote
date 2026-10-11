@@ -124,9 +124,10 @@ class ContextBuilderTest {
         val en = ContextBuilder.buildTurn(target, lesson + target, null, null, resolve, language = "en")
         assertTrue(en.systemText.startsWith("You are a patient"))
         assertTrue(ContextBuilder.buildTurn(target, lesson + target, null, null, resolve).systemText.startsWith("你是耐心"))
-        // Chat is soft and uses the 鱼鱼 / 用户酱 nicknames in both languages.
+        // The companion uses localized names, with fully English built-in instructions in English mode.
         assertTrue(PromptKind.GENERAL.default("zh").contains("鱼鱼") && PromptKind.GENERAL.default("zh").contains("用户酱"))
-        assertTrue(PromptKind.GENERAL.default("en").contains("用户酱"))
+        assertTrue(PromptKind.GENERAL.default("en").contains("Yuyu") && PromptKind.GENERAL.default("en").contains("User-chan"))
+        assertFalse(PromptKind.GENERAL.default("en").any { it in '\u4e00'..'\u9fff' })
         // Only the untouched built-in template follows the language.
         assertEquals(StudyPrompts.of("en").guided, StudyPrompts.localizedTemplate(StudyPrompts.GUIDED, true, "en"))
         assertEquals("mine", StudyPrompts.localizedTemplate("mine", true, "en"))

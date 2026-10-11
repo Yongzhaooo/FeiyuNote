@@ -94,6 +94,9 @@ fun ChatScreen(
     var summarizing by rememberSaveable { mutableStateOf(false) }
     var retryTemplateFor by rememberSaveable { mutableStateOf<Long?>(null) }
     var reviewingEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var showRename by rememberSaveable { mutableStateOf(false) }
+    var staleKnowledgeQuestion by rememberSaveable { mutableStateOf<Long?>(null) }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_STOP) { vm.saveScratchpad() }
     val d = data
     val reviewingEntry = remember(d?.entries, reviewingEntryId) {
         d?.entries?.firstOrNull { it.id == reviewingEntryId }
@@ -103,8 +106,26 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(d?.lesson?.let { lessonTitle(context, it) } ?: "", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) },
-                navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), onBack) },
+                title = {
+                    val titleText = d?.lesson?.let { lessonTitle(context, it) } ?: ""
+                    if (!general && d?.lesson != null) {
+                        Text(
+                            text = titleText,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.clickable { showRename = true }.testTag("lesson-title"),
+                        )
+                    } else {
+                        Text(
+                            text = titleText,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                },
+                navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), { vm.saveScratchpad(); onBack() }) },
                 actions = {
                     TextButton(enabled = d?.lesson != null && status.running == null, onClick = { summarizing = true }) { Text(context.getString(if (general) R.string.summarize_chat else R.string.summarize)) }
                     TextButton(enabled = d?.lesson != null, onClick = onOpenArchived) { Text(context.getString(R.string.archived)) }
@@ -177,6 +198,7 @@ fun ChatScreen(
                                 readOnly = false,
                                 onRetry = { user ->
                                     if (user.templateId != null && d.templates.none { it.id == user.templateId }) retryTemplateFor = user.id
+                                    else if (user.requestContext.knowledge.isNotEmpty()) staleKnowledgeQuestion = user.id
                                     else vm.retry(user.id)
                                 },
                                 onAddToReview = if (!practice && vm.notebookId != com.feiyu.notes.data.NotebookStore.GENERAL_ID) {
@@ -206,6 +228,13 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    staleKnowledgeQuestion?.let { questionId ->
+        AlertDialog(onDismissRequest = { staleKnowledgeQuestion = null }, title = { Text(context.getString(R.string.retry)) },
+            text = { Text(context.getString(R.string.retry_knowledge_choice)) },
+            confirmButton = { TextButton(onClick = { vm.retry(questionId); staleKnowledgeQuestion = null }) { Text(context.getString(R.string.retry)) } },
+            dismissButton = { TextButton(onClick = { vm.retry(questionId, removeKnowledge = true); staleKnowledgeQuestion = null }) { Text(context.getString(R.string.retry_without_knowledge)) } })
     }
 
     if (summarizing && d != null) ChoiceDialog(
@@ -246,6 +275,29 @@ fun ChatScreen(
                 vm.addToReview(entry.id, topic, notes)
             },
             onDismiss = { reviewingEntryId = null },
+        )
+    }
+    if (showRename && d?.lesson != null) {
+        val suggestion = status.titleSuggestion?.takeIf { it.lessonId == vm.lessonId }?.title
+        val isExtracting = status.running?.operation == com.feiyu.notes.study.GenerationOperation.TITLE && status.running?.lessonId == vm.lessonId
+        val isBusy = status.running != null
+        RenameLessonDialog(
+            initialTitle = d.lesson.title,
+            suggestedTitle = suggestion,
+            isExtracting = isExtracting,
+            isBusy = isBusy,
+            onSuggest = { vm.suggestTitle() },
+            onConfirm = { newTitle ->
+                vm.cancelTitle()
+                vm.renameLesson(newTitle) { saved ->
+                    if (saved) { vm.clearTitleSuggestion(); showRename = false }
+                }
+            },
+            onDismiss = {
+                vm.cancelTitle()
+                vm.clearTitleSuggestion()
+                showRename = false
+            },
         )
     }
 }
@@ -492,6 +544,10 @@ private fun Composer(
     val referenceId by vm.referenceId.collectAsStateWithLifecycle()
     val templateOverride by vm.templateOverride.collectAsStateWithLifecycle()
     val templateChoice by vm.templateChoice.collectAsStateWithLifecycle()
+    val scratchpad by vm.scratchpad.collectAsStateWithLifecycle()
+    val attachScratchpad by vm.attachScratchpad.collectAsStateWithLifecycle()
+    val knowledgePreview by vm.knowledgePreview.collectAsStateWithLifecycle()
+    var showScratchpad by rememberSaveable { mutableStateOf(false) }
     var showAttach by rememberSaveable { mutableStateOf(false) }
     var pickReference by rememberSaveable { mutableStateOf(false) }
     var pickTemplate by rememberSaveable { mutableStateOf(false) }
@@ -500,6 +556,21 @@ private fun Composer(
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { vm.importPhotos(it) }
 
     Column(Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (vm.lessonId != com.feiyu.notes.data.NotebookStore.GENERAL_ID) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { showScratchpad = !showScratchpad }, modifier = Modifier.testTag("toggle-scratchpad")) { Text(context.getString(R.string.scratchpad)) }
+                androidx.compose.material3.Checkbox(checked = attachScratchpad, onCheckedChange = vm::setAttachScratchpad, modifier = Modifier.testTag("attach-scratchpad"))
+                Text(context.getString(R.string.attach_scratchpad), style = MaterialTheme.typography.bodySmall)
+            }
+            if (showScratchpad) {
+                OutlinedTextField(value = scratchpad, onValueChange = vm::setScratchpad,
+                    label = { Text(context.getString(R.string.scratchpad_hint)) }, maxLines = 4,
+                    modifier = Modifier.fillMaxWidth().testTag("scratchpad-input"))
+                TextButton(onClick = { vm.saveScratchpad() }) { Text(context.getString(R.string.save)) }
+            }
+        }
+        if (knowledgePreview.isNotEmpty()) Text(context.getString(R.string.knowledge_preview, knowledgePreview.joinToString(" · ") { it.headingPath.ifBlank { context.getString(R.string.document_intro) } }),
+            style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("knowledge-preview"))
         if (parentId > 0) {
             val mode = when (EntryAction.valueOf(action)) {
                 EntryAction.EXPAND -> context.getString(R.string.expand)
@@ -528,7 +599,7 @@ private fun Composer(
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val refName = referenceNotes.firstOrNull { it.id == referenceId }?.let { context.getString(R.string.reference_selected, it.id) } ?: context.getString(R.string.reference_none)
-            TextButton(onClick = { pickReference = true }) { Text(refName) }
+            TextButton(onClick = { pickReference = true }, modifier = Modifier.testTag("pick-reference")) { Text(refName) }
             val effective = if (templateOverride) templateChoice.takeIf { it > 0 } else defaultTemplateId
             val tName = effective?.let { id -> templates.firstOrNull { it.id == id }?.name } ?: context.getString(R.string.none)
             TextButton(onClick = { pickTemplate = true }) { Text(context.getString(if (!templateOverride && effective != null) R.string.template_default_name else R.string.template_name, tName)) }
@@ -586,6 +657,7 @@ private fun Composer(
         selected = referenceId.takeIf { it > 0 },
         noneLabel = context.getString(R.string.no_reference),
         confirmLabel = context.getString(R.string.confirm),
+        emptyPrompt = context.getString(R.string.reference_empty_hint, context.getString(if (vm.lessonId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) R.string.summarize_chat else R.string.summarize)),
         onConfirm = vm::setReference,
         onDismiss = { pickReference = false },
     )
@@ -607,6 +679,7 @@ fun ChoiceDialog(
     selected: Long?,
     noneLabel: String,
     confirmLabel: String,
+    emptyPrompt: String? = null,
     onConfirm: (Long?) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -618,6 +691,14 @@ fun ChoiceDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FilterChip(selected = choice == null, onClick = { choice = null }, label = { Text(noneLabel) })
+                if (options.isEmpty() && emptyPrompt != null) {
+                    Text(
+                        emptyPrompt,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp).testTag("reference-empty-hint"),
+                    )
+                }
                 options.forEach { (id, label) ->
                     FilterChip(selected = choice == id, onClick = { choice = id }, label = { Text(label) })
                 }
@@ -625,5 +706,87 @@ fun ChoiceDialog(
         },
         confirmButton = { TextButton(onClick = { onConfirm(choice); onDismiss() }) { Text(confirmLabel) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(context.getString(R.string.cancel)) } },
+    )
+}
+
+@Composable
+fun RenameLessonDialog(
+    initialTitle: String,
+    suggestedTitle: String?,
+    isExtracting: Boolean,
+    isBusy: Boolean = isExtracting,
+    onSuggest: () -> Unit,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    var text by rememberSaveable { mutableStateOf(initialTitle) }
+    var userEdited by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(suggestedTitle) {
+        if (!suggestedTitle.isNullOrBlank() && !userEdited) {
+            text = suggestedTitle
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(context.getString(R.string.rename)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = {
+                        text = it
+                        userEdited = true
+                    },
+                    label = { Text(context.getString(R.string.title)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("rename-input"),
+                )
+                if (suggestedTitle != null) {
+                    Text(context.getString(R.string.title_suggestion_label, suggestedTitle), style = MaterialTheme.typography.bodySmall)
+                    if (userEdited) TextButton(onClick = { text = suggestedTitle; userEdited = false }) { Text(context.getString(R.string.use_suggested_title)) }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        enabled = !isBusy,
+                        onClick = {
+                            userEdited = false
+                            onSuggest()
+                        },
+                        modifier = Modifier.testTag("suggest-title")
+                    ) {
+                        if (isExtracting) {
+                            Text(context.getString(R.string.suggesting_title))
+                        } else {
+                            Text(context.getString(R.string.suggest_title))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !isExtracting && text.isNotBlank(),
+                onClick = {
+                    if (text.isNotBlank()) {
+                        onConfirm(text)
+                    }
+                },
+                modifier = Modifier.testTag("rename-confirm")
+            ) {
+                Text(context.getString(R.string.confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(context.getString(R.string.cancel))
+            }
+        }
     )
 }

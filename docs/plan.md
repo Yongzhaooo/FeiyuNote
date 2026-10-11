@@ -285,3 +285,197 @@ P1/P2/P3 可并行，P4 在独占文件中可与它们并行；共享 FeiyuApp�
 - 同一 APK 用 `scripts/publish-download.ps1` 发布到 `yz_vps:/srv/feiyunote`。线上下载页显示 0.4.0 和交流群；APK 为 HTTP 200、MIME 正确，下载后 SHA-256 与 Release 一致；[更新索引](https://feiyunote.cangming.fyi/updates/android.json) 为 0.4.0 / 9、minSdk 26，Cache-Control 为 no-cache。
 - TB321FU 已覆盖安装 Release 产物，版本 0.4.0 / 9，首次安装时间不变。
 - 未执行：真实 DeepSeek 请求、真实折叠态、深色模式下的下载页检查。
+
+## 五项 Issue 的评估与实施计划（2026-10-12）
+
+本节先记录规划：用户确认五项指 #1、#3、#4、#5、#6；#1 仅考虑尚缺部分，并确认 #6 沿用单个 SQLite 数据库，严格按课程隔离。随后用户授权执行 #3—#6，并在 AGY 交付质量不足后要求主线程直接接管。以下规划保留为决策依据，实际实现和验收状态见末尾执行记录。
+
+### 基线与需求状态
+
+应用源码在 `E:\Projects\Opensource\肥鱼笔记`，当前聊天目录 `E:\Projects\Opensource\FeiyuNote` 是素材 checkout。应用 HEAD 为 `72d2eb5af23783c982e8d842f28d56a5ec84bcc5`，分支 `feat/settings-split-cute-ui`；实际 origin 是 `Yongzhaooo/FeiyuNote`，与 AGENTS.md 中的历史 fork 说明不同。版本 0.4.0 / 9，数据库 v4，minSdk 26。
+
+规划开始时，`UiFlowTest.kt` 已有用户改动，另有未跟踪的 `docs/superpowers/`、`docs/tutorial/`、`output/`、`scripts/make-promo.py`。本轮只追加本节，不改动这些内容。后续实现前重新核对基线和工作区，不在当前工作区直接切分支。
+
+2026-10-12 读取 GitHub 全部 Issue、正文及评论，并核实 PR #2 的合并状态：
+
+| 需求 | 当前事实 | 评估与安排 |
+| --- | --- | --- |
+| [#1 课程复习记录](https://github.com/Yongzhaooo/FeiyuNote/issues/1) | 作者 XePWang；Issue 仍 open，但 [PR #2](https://github.com/Yongzhaooo/FeiyuNote/pull/2) 已于 10 月 6 日合并，功能随 0.3.3 发布 | 原始 CRUD、三态、课程隔离、来源回查已实现。维护者评论中的随机知识卡片是后续方向，列为 P5 候选，不重做已交付功能 |
+| [#3 参考笔记空状态](https://github.com/Yongzhaooo/FeiyuNote/issues/3) | 作者 Yongzhaooo；open；assignees 为空，无评论 | 收益直接、风险低、无模型开销。P1，最先交付 |
+| [#4 日期与主题标题](https://github.com/Yongzhaooo/FeiyuNote/issues/4) | 作者 Yongzhaooo；open；assignees 为空，无评论 | 改善课次查找；有显式模型调用与取消/确认状态。P2，接在 P1 后 |
+| [#5 随堂手记](https://github.com/Yongzhaooo/FeiyuNote/issues/5) | 作者 Yongzhaooo；open；assignees 为空，无评论 | 课堂记录价值高，涉及持久化、发送快照与迁移。P3，作为知识库接入前的数据与上下文基础 |
+| [#6 课程知识库](https://github.com/Yongzhaooo/FeiyuNote/issues/6) | 作者 Yongzhaooo；open；assignees 为空，无评论 | 阅读和检索两种模式都交付；成本最高。P4a 先验证中文 FTS，P4b 完成手册，P4c 完成提问联动 |
+
+空 assignee 不能证明没有人在私下开发。#3 至 #6 的公开页面目前没有认领证据；#1 已由贡献者实现。以上状态不等同于批准、认领或编码授权。
+
+既有 `docs/superpowers/plans/2026-10-11-issue-3-4-5-features.md` 是未提交草案。本节作为五项计划入口，保留其产品意图，替代其中任务分解与接口建议：空状态的 JVM 布尔断言不能证明 UI；Lesson 默认字段测试不能证明迁移；当前 Generator 没有 `rawGenerate`；草案中的 12 字标题上限与 Issue 的 4 至 8 字不同。后续执行采用本节，不继承强制逐项提交或额外代理要求。
+
+### 共享边界与接口
+
+下文 `K` 为 `app/src/main/java/com/feiyu/notes`，`U` 为 `app/src/test/java/com/feiyu/notes`，`A` 为 `app/src/androidTest/java/com/feiyu/notes`。标有“新建”的路径当前不存在。每个纵向工作项包含自身代码、测试和中英说明。
+
+1. 复用 NotebookStore、Generator、ContextBuilder、Navigation 3、MathContent。普通问答只在发送时本地取资料；编辑、展开、读手册和切换页面不触发模型请求。标题、问答、整理共用 Generator 的单请求限制、配置加载、错误映射与取消。
+2. 课程知识库只用于 `COURSE` 且 `notebookId != GENERAL_ID` 的课程。刷题本的既有“引用关联课程笔记”行为保持不变，首版不自动读取关联课程知识库。复习记录继续纯本地，不注入普通问答。
+3. #4 与 #5 的课次入口先覆盖课程和刷题本，公共聊天保持原入口。#6 专用于课程。数据层复核 notebook/lesson 归属，不能依赖 UI 隐藏入口。
+4. 迁移顺序建议为 v4 → v5（P3 手记及请求快照）→ v6（P4b/c 手册及索引）。保留 v1/v2/v3 升级链，不删除重建用户库；版本由同一数据负责人管理。执行前发现版本已被占用时重新分配版本，暂停相关迁移工作。
+5. 单库隔离已获用户确认。手册、章节和书签由普通表保存，使用外键与课程归属约束；FTS 只是可重建索引。检索必须连接实体表并约束 `notebook_id = ?`，之后才能排序和 LIMIT，不能先跨课程取 top-2 再过滤。索引更新和实体写入同一事务，课程删除时实体、书签和索引一起清除。
+6. 新材料的开关与来源在发送前可见。建议“附带本课手记”默认开启；资料首次导入确认页让用户选择启用课程知识参考，此后在课程内保存开关。关闭时请求完全不包含对应材料。
+
+建议固定的生产者/消费者接口如下。接口调整只暂停受影响项，先更新本节再继续执行。
+
+| 接口 | 生产者与消费者 | 建议契约与失败行为 |
+| --- | --- | --- |
+| `Lesson.scratchpad: String = ""` | P3 数据层 → StudyViewModel/编辑区/整理 | 新课与旧课默认空串；不是 NOTE，不混入参考笔记列表 |
+| `updateScratchpad(notebookId: Long, lessonId: Long, text: String): Boolean` | StudyViewModel → NotebookStore | 事务内校验课次归属；保留全文和空串；目标失效返回 false，不重新创建课次；IO 异常保留草稿并显示保存失败 |
+| `Entry.requestContext: TurnContext` | P3/P4c 发送入口 → 持久化用户 Entry → Generator/ContextBuilder/重试 | 新建 `K/study/TurnContext.kt`（也可在 Models.kt 定义数据类）；SQLite `entries.request_context` 保存 UTF-8 JSON，空默认 `{}`。v1 数据形状为 `version=1, scratchpad: String?, knowledge: List<KnowledgeContext>`；旧条目解码为空上下文，损坏数据报错，不伪造空成功 |
+| `KnowledgeContext` | P4c 数据层 → TurnContext | `notebookId, documentId, documentRevision, sectionId, headingPath, markdown`；存完整命中小节及来源版本，最多两条。数据层复核所有 ID 的课程归属 |
+| `ContextBuilder.buildTurn(..., requestContext: TurnContext = empty)` | 已保存 Entry → 纯请求组装 | 手记和 `<课程知识>` 是参考资料，提示词明确不执行资料中的指令；标签与边界字符转义。不改变祖先链、图片与显式参考笔记规则 |
+| `ContextBuilder.buildSummary(..., scratchpad: String? = null)` | Generator → 整理 | 获取本课已保存手记快照和未归档已完成问答；不加入其他课手记、课程知识库或复习记录；来源 Entry ID 仍只记录真实问答 ID |
+| `Generator.suggestTitle(notebookId, lessonId): StartResult` | P2 UI → 共用生成入口 | 不创建聊天 Entry，不自动改标题。建议新增状态 `GenerationStatus.titleSuggestion`，包含目标 ID 和候选标题；StudyViewModel 只消费匹配课次的结果。新增 operation=TITLE 与诊断枚举，保留单请求与取消行为 |
+| `readCourseHandbook(notebookId)` / `saveCourseHandbook(notebookId, markdown, expectedRevision)` | P4b 编辑/导入 → NotebookStore | 每课程一份资料，版本递增；冲突返回 Conflict，保留编辑稿，避免覆盖新版本；导入失败不动原资料 |
+| `searchCourseKnowledge(notebookId, question, limit = 2)` | P4c Generator → 数据层 | 参数化查询，limit 固定约束 1 或 2；无命中返回空列表。索引故障显示参考不可用，发送前允许用户关闭参考继续，不能悄悄扩大课程范围 |
+
+请求预算由 P3 定义，P4c 消费：建议完整文本输入上限 60,000 个字符，统计基础提示、模板、参考笔记、问题、手记、课程知识及历史；这只是本地字符预算，不声称精确等于模型 token 上限。问题、模板和显式参考材料优先保留，历史沿现有规则从最旧开始移除并保持问答起点。手记与知识库合计最多 12,000 字符，知识小节整条保留或整条舍弃；手记超限提示修改或关闭附带，不静默截断。单个小节无法完整放入时不注入并给出可见提示。预算规则用合成输入验证，不靠真实计费 API 验收。
+
+新提问在保存用户 Entry 时冻结附带手记和课程知识快照，进行中继续编辑不影响该请求。重试复用原提问的开关与快照；手记后续编辑不改变旧提问。知识资料版本变化或删除时，重试需先提示参考已变化，让用户显式移除旧参考或作为新提问使用新资料，不悄悄重新检索。历史快照保留于原提问，不能因为资料删除又被自动发送。整课删除按现有 Entry 级联规则处理。
+
+### P1：参考笔记选择器空状态（#3）
+
+- 结果：无参考笔记时，在“不用参考笔记”下方显示 Issue 的中文引导；英文与公共聊天使用对应“整理对话”文案。已有笔记时隐藏引导。
+- 范围与归属：修改 `K/ui/ChatScreen.kt::Composer/ChoiceDialog`、`res/values/strings.xml`、`res/values-zh/strings.xml`；验收修改 `A/ui/UiFlowTest.kt`，先保留和理解该文件既有用户 diff。不改数据库和生成路径。
+- 步骤：为 ChoiceDialog 加可选空提示参数，只由参考笔记调用点提供；模板选择器保持原样。复用实际整理动作的本地化名称，避免引导找不到按钮。
+- 验证：真实 Compose 用例打开空课程选择器，看到“不用参考笔记”和引导；添加一条整理笔记后引导消失、条目可选；模板弹窗不出现此文案。上述打开/关闭过程 fake 模型调用计数为 0，原无参考选择语义不变。
+- 停止条件：若实际 UI 已有更改或整理入口位置与 Issue 不符，先调整文案对应关系；不得为本项重做参考系统。
+
+### P2：显式提炼日期与主题标题（#4）
+
+- 结果：点击课次标题打开重命名弹窗，支持本地手动改名；点击“提炼主题”才请求模型，展示候选，用户确认才写入 `lessons.title`。
+- 范围与归属：修改 `K/ui/ChatScreen.kt`、`K/study/StudyViewModel.kt`、`Generator.kt`、`StudyPrompts.kt`、`K/support/DiagnosticModels.kt` 和中英文资源；复用 `K/data/NotebookStore.kt::renameLesson`。新建 `K/study/TitleSuggester.kt` 与 `U/study/TitleSuggesterTest.kt`，扩大 `A/study/GeneratorTest.kt` 与 `A/ui/UiFlowTest.kt`。
+- 步骤：先定义纯函数负责筛选摘录、构造指令与校验候选，再接 Generator。建议取本课最早三组未归档已完成问答，不带图片、笔记和兄弟链外材料，摘录最多 6,000 字符；日期优先保留现标题中合法 `YYYY-MM-DD` 前缀，否则取 `createdAt` 的设备本地日期，不使用生成当天日期。标题候选为“日期 + 一个空格 + 4 至 8 个中文码点主题”；异常、空白、多段解释或不合长度的结果保持原题并提示重试/手改，不靠截断制造有效主题。英文界面主题建议 2 至 6 个词，这是本计划新增的本地化默认值。
+- 验证：候选不改变数据库，确认后课次列表和会话顶部同步，重开仍在；取消与网络失败不改原题；无已完成问答只允许手动改名，不发请求。快速双击只请求一次；问答忙时提炼返回 Busy；旋转不重发；删除课次后的迟到候选丢弃。日期前缀、无日期旧标题、非 BMP Unicode、超长或空模型输出分别有纯函数断言。fake 模型验证无新聊天条目。
+- 停止条件：若要扩大到公共聊天、取消确认直接覆盖，或改变默认日期规则，先由计划负责人更新契约。Generator 的 Running 不再用 `isSummary` 猜所有动作，需要窄范围 operation 枚举并更新现有消费者。
+
+### P3：随堂手记与问答/整理联动（#5）
+
+- 结果：课次内可展开/折叠编辑纯文本或 Markdown 源码；保存到本地，提问可附带发送时的最新手记；“整理本课”融合手记和问答。手记与 AI 整理笔记分开保存。
+- 范围与归属：修改 `K/data/Models.kt`、`NotebookDatabase.kt`、`NotebookStore.kt`、`K/study/StudyViewModel.kt`、`Generator.kt`、`ContextBuilder.kt`、`StudyPrompts.kt`、`K/ui/ChatScreen.kt` 和中英资源。测试归本项：`U/study/ContextBuilderTest.kt`、`A/data/NotebookStoreTest.kt`、`A/study/GeneratorTest.kt`、`A/ui/UiFlowTest.kt`；新建 v4 SQL fixture `app/src/androidTest/assets/notes-v4.sql`。
+- 步骤：v5 新增 `lessons.scratchpad TEXT NOT NULL DEFAULT ''` 与 `entries.request_context TEXT NOT NULL DEFAULT '{}'`；更新 create/read/upgrade 的全部路径。StudyViewModel 管编辑稿、已存稿、保存中/失败状态。建议 500 ms 合并保存，写入串行且带编辑版本防止旧写覆盖新写；提供立即保存动作。发送、整理、正常离开/收起前 flush，flush 失败保留编辑稿并阻止依赖它的发送。短暂恢复用 SavedStateHandle，数据库保留已完成保存，不宣称突然断电前的未落盘字符也已保存。
+- 验证：手记保存、清空、重开、旋转恢复；课程 A 的手记不进入 B；公共聊天无入口。关闭附带时问答请求不含手记；开启时与问题和图片同一请求；发送后编辑、失败重试仍使用已存快照。整理含手记与完成问答，不含归档问答；建议支持“只有手记也可整理”，两者都空才返回 summary_empty。保存失败保留稿，旧异步保存不能覆盖新文字，删除课次不被迟到保存重建。
+- 迁移证明：在真实 Android SQLite 中执行 v1/v2/v3/v4 → v5；旧标题、ID、问答父链、图片路径、模板与复习记录保持，新增内容为空。新增 JSON 往返与损坏处理有断言。Lesson.copy 测试不能替代此检查。
+- 停止条件：若要求完整富文本编辑器或导出手记，此项先更新产品范围。需要改持久化快照形状时暂停 P4c，保持 P4a 独立推进。
+
+### P4a：中文 FTS 与章节完整性验证（#6 的前置项）
+
+- 结果：用小型可运行仪器测试确定 Android 原生 FTS4 在 API 26 与现有 CI API 36 上可用，确认中文关键词确实能命中完整小节，再确定正式索引字段与查询规则。
+- 范围与归属：新建 `A/data/CourseKnowledgeFtsTest.kt`，仅测试私有临时库和合成 Markdown；若需要分段/分词纯函数，新建 `K/study/CourseKnowledgeText.kt` 与对应 JVM 测试。此项不变更正式 notes.db schema。
+- 步骤：验证 `CREATE VIRTUAL TABLE ... USING fts4` 与 tokenizer；对“特征值”“因果分析”“贝叶斯定理”、中英混合、公式、重复章节、无命中、含引号/OR/星号的问题检查召回和安全查询。候选实现为 Kotlin 生成中文相邻双字词与英文词的索引文本，再使用 FTS4；问题端使用同一规则，不直接把整句当 MATCH 语法。单字与纯图片提问无可靠关键词时返回空结果，不额外调用模型/OCR。
+- 验证：固定 20 个有目标章节的问题，预期章节进入 top-2 至少 18 个；5 个无关问题不注入材料；两课程有相同词时仅返回指定课程。fixture 包含定理前提、结论和完整公式，返回原小节全文。20 个问题、预期章节和实测结果保留在测试/本节，先检查再确定排名阈值。另以 1 MiB、1,000 小节合成库记录查询耗时，建议 CI 热查询 p95 ≤ 200 ms，不把它当真机性能证据。
+- 停止条件：API 26 不支持候选模块、召回未达标或不能保留前提时，停止 P4c 的正式实现，交回实测失败。可继续 P1 至 P3；不静默更换为向量库、联网检索或额外模型抽取。
+
+SQLite 官方说明 unicode61 根据空白和标点分词；据此不能假定原始中文连续句子已具备词语召回，必须验证中文预处理。[SQLite FTS3/FTS4 文档](https://www.sqlite.org/fts3.html#tokenizer)是技术依据，实际设备结果由 P4a 提供。
+
+### P4b：课程 Markdown 手册、章节导航与书签（#6）
+
+- 结果：课程页面提供“课程资料”入口，每门课程导入、编辑和离线阅读一份 UTF-8 Markdown；可按大纲跳转、添加/移除书签，重启后书签保留，公式沿用原生渲染。
+- 范围与归属：修改 `K/data/Models.kt`、`NotebookDatabase.kt`、`NotebookStore.kt`、`K/ui/LessonListScreen.kt`、`AppNavigation.kt` 与中英资源；新建 `K/ui/CourseHandbookScreen.kt`、`K/study/CourseHandbookViewModel.kt`、`K/study/CourseKnowledgeText.kt`（若 P4a 已创建则接续）。验收 `A/data/NotebookStoreTest.kt`、`A/ui/UiFlowTest.kt`、新建 `U/study/CourseKnowledgeTextTest.kt`。
+- 建议数据形状：`course_documents(id, notebook_id UNIQUE FK, markdown, revision, updated_at)`；`course_sections(id, document_id, notebook_id, heading_path, markdown, ordinal)`；`course_bookmarks(id, notebook_id FK, section_id nullable, heading_path_snapshot, created_at)`。document/section 提供 `(id, notebook_id)` 组合唯一键，section/bookmark 的组合外键校验课程一致；所有实体保留直接的 notebook 级联删除外键。删除结构中的章节前，在同一事务把对应书签的 section_id 置空并保留标题路径快照，使其可以显示失效。FTS 最终结构待 P4a 冻结，P4b 持有 v6 schema 写权限并统一加入 P4c 索引定义，消费者不得各自升级 VERSION。
+- 步骤：系统 OpenDocument 选择文件，读入上限建议 1 MiB，严格 UTF-8（允许 BOM），解码/超限失败显示原因且保留旧资料；不执行 HTML、脚本或加载远端图片。保存文档及分段在一个事务完成，保存失败保留旧版本与编辑稿。新导航 `CourseHandbookKey(notebookId, sectionId: Long? = null)` 只传 ID，按课程重查。
+- 阅读与切分：先支持 ATX/Setext 标题、大纲、段落、列表、加粗/斜体和原生公式；代码块/复杂表格保留源文可读，完整 Markdown 语法支持不作为默认承诺。现有 MathContent 只处理文字和公式，不能直接声称已渲染 Markdown。新阅读组件只在本项复用 MathContent，不顺带重写聊天渲染。公式块和代码围栏内的 `#` 不能当标题；检索小节边界以一级/二级标题为主，三级以下与正文一起保留，章节路径及必要上级前导内容一并返回，防止拆开定理条件。
+- 书签：按章节实体 ID 保存；仅正文变化且标题路径唯一不变时保留该 ID。重复标题使用层级路径与出现序号避免歧义；结构更换后无法确定映射的书签明确显示失效并可移除，不自动跳到不同章节。整份替换前预览资料和将失效的书签，确认才保存。
+- 验证：中文/英文资料、所有四种已有公式分隔符、同名标题、无标题资料、公式中的 `#`、围栏标题、超宽公式；导入失败/保存失败不丢旧资料；从目录和书签跳转正确；重开、正常编辑后书签位置正确，结构删除后失效可见；A 课程不能用 B 的 sectionId 打开或写书签；删除课程清除所有实体及索引。浅/深色、大字号、手机/双栏可读。
+- 停止条件：若提出多文档、PDF/OCR、外部图片、同步或完整 Markdown 兼容要求，更新范围与成本再实施。P4a 未冻结索引结构时可做阅读组件和解析测试，正式 v6 schema 等其结果。
+
+### P4c：本地检索与提问上下文（#6）
+
+- 结果：启用课程知识参考后，发送问题时本地检索最多两个相关完整小节，将来源章节和正文作为 `<课程知识>` 注入 System Prompt；阅读与检索共用同一资料版本，新增模型调用数为 0。
+- 范围与归属：修改 `K/data/NotebookStore.kt` 的知识查询/事务索引操作、`K/study/Generator.kt`、`ContextBuilder.kt`、`StudyPrompts.kt`、`StudyViewModel.kt` 和 `K/ui/ChatScreen.kt` 的参考状态显示；索引 schema 由 P4b 数据负责人统一修改。复用 P3 TurnContext 与预算，验收 `U/study/ContextBuilderTest.kt`、`A/data/CourseKnowledgeFtsTest.kt`、`A/study/GeneratorTest.kt`、`A/ui/UiFlowTest.kt`。
+- 步骤：采用 P4a 达标的同一分词/排名规则；读取课程开关和当前文档版本，检索、校验、保存提问快照时复核版本，版本冲突不发模型请求。最多两小节，标题/正文证据满足阈值才选择，无命中不注入。只用当前提问文本检索；纯图片问题仍按原识图路径发送。快照放入已保存用户 Entry，再交纯 ContextBuilder 组装，避免另造一条未持久化请求路径。
+- 验证：fake 请求正文包含指定课程的 1 至 2 个完整小节和 `<课程知识>`，图片仍仅在 user 消息；其他课程、复习记录、兄弟分支和全库资料不出现。关闭/无命中不包含知识段，普通发送仍只有一个模型请求。预算边界整节舍弃、版本冲突、索引故障、删除后重试、资料指令注入样例分别验证；开关、重新进入界面、旋转不发请求。删除/替换资料后下一次检索不会命中旧索引。
+- 停止条件：依赖 P3 快照/预算、P4a 的实测契约、P4b 文档/章节 ID 与版本。若某项未稳定，允许准备测试，暂停正式请求接入。
+
+### P5：复习记录剩余方向（#1，候选）
+
+#1 原始需求没有发现新的实施缺口。现有三态和手工新增是实际已发布行为，维护者早期“两态、暂缓手工新增”建议不能据此倒退已发布功能。[后续评论](https://github.com/Yongzhaooo/FeiyuNote/issues/1#issuecomment-5960794721)提出参考随机知识卡片，但没有确定交互和抽样规则。
+
+- 建议结果：在现有课程复习页显式点击“随机复习”，本地从当前筛选结果抽一张已有 ReviewRecord；可看说明、回到来源、标记已理解，使用既有记录和状态，不调用模型、不新建卡片表。
+- 建议范围与归属：仅 `K/ui/CourseReviewScreen.kt`、必要的 `K/ui/ReviewState.kt`、中英资源及 `U/ui/ReviewInteractionTest.kt`、`A/ui/UiFlowTest.kt`；既有 CRUD/schema 保持。窗口复用现有复习数据及来源状态。
+- 建议步骤：直接从已加载的课程/筛选列表抽取，空集合显示“暂无可复习内容”；重新抽取有至少两项时不连续抽到同一项。已理解默认由当前筛选控制，不隐藏用户主动选定的记录。抽中后记录被删除则关闭卡片并提示，不跳到失效来源。
+- 验证：空、单条、两条、跨课程隔离、筛选一致、状态更新、来源删除、当前记录删除；随机选择注入可控 Random 以稳定断言；所有动作 fake 模型调用为 0。
+- 停止条件：这是新增设计提案。随机抽取是否应在筛选结果内、是否需要遮挡答案/复习间隔尚未获用户确认，实施阶段暂停 P5，先交付独立的 P1 至 P4。若最终只保持现有复习记录，则本项结案为“无新增开发”。
+
+### 顺序、并行与收口
+
+推荐交付批次为：P1 空状态 → P2 标题 → P3 随堂手记 → P4b/P4c 完整知识库；P4a 可提前验证。P5 不绑定该版本。各批次都可独立验收，但 P4 的完成条件同时包含手册阅读与 FTS 联动，不能仅以阅读器交付宣称 #6 完成。版本号、发布时间不在本轮决定。
+
+| 工作项 | 可开始阶段 | 实施依赖 | 验证依赖 / 写入限制 |
+| --- | --- | --- | --- |
+| P1 | 下次获得实现授权后可开始 | 无 | 与 P2/P3 共用 ChatScreen、双语资源及 UiFlowTest，串行写入 |
+| P2 | 同上，可先做纯函数与测试 | Generator operation/result 契约按上文落实 | 与 P3 共用 Generator/ViewModel，串行集成 |
+| P3 | 同上，可先迁移与存储 | v5 版本和快照形状由数据负责人确认未占用 | 数据层可在 P2 UI 阶段推进；重叠资源/UI/Generator 统一由集成负责人串行修改 |
+| P4a | 同上，可与 P1/P2/P3 并行 | 无，仅隔离测试库 | 单一模拟器上的仪器检查排队，不并发修改测试服务/设备 |
+| P4b | 解析/阅读准备可开始 | 正式 v6 schema 等 P3 v5、P4a 索引契约 | 不与 P3 同时修改 Models/Database/Store/UiFlowTest；独立阅读组件可并行准备 |
+| P4c | 可先按接口准备纯组装测试 | 正式实现等 P3 + P4a + P4b | 端到端验收等同一版本的文档、索引与请求；集成负责人拥有此连接验收 |
+| P5 | 范围确认前只保留提案 | 用户确认随机复习产品范围 | 确认后可与 P4 独立实现；双语资源和 UiFlowTest 合入仍串行 |
+
+这些关系描述可行并行度，不要求启动子代理。单人执行可完全按顺序完成。即使分开 checkout，共用模拟器和服务也不并行验证；若要多执行者，先分配独立文件写权限，数据库版本及连接验收只设一个负责人。
+
+### 验收证据与交接
+
+本轮已执行的是需求/评论/PR 状态查询、Git/构建配置核对和相关源码阅读；仅添加计划文档。下列都是后续计划检查，不表示本轮已通过功能、迁移或设备测试。
+
+1. 各项实现者先跑自己新增或受影响的 JVM/仪器用例。界面行为由 Compose 真正打开页面断言；数据约束和迁移由 Android SQLite 验证；模型次数与输入由现有 fake generate 验证。新 fixture 只使用合成内容。
+2. 集成负责人在完成当前批次后运行 `pwsh -NoProfile -File scripts/ci.ps1`；最终包含数据库/UI/生成器的批次运行 `pwsh -NoProfile -File scripts/ci.ps1 -Full`。全套证据只归收口项，不要求各角色重复跑。API 26 的 FTS 验证另行记录，不能用 CI API 36 结果替代。
+3. Windows 文本和日志明确 UTF-8；Python 子进程设 `PYTHONUTF8=1`、`PYTHONIOENCODING=utf-8`。分别记录命令退出码、runner 逐项结果和实际产物，默认不调用真实计费模型。Markdown 文档改动本身仅检查 diff、内容与链接。
+4. 实现相应批次时更新 `docs/spec.md` 和本节接受结果：#5 是显式附带人工手记，#6 是指定课程导入资料的本地检索，不能将旧“无 RAG/普通问答不注入”的阶段边界当作授权扩展复习记忆。更新 `docs/wayfinder.md` 当前进展与下一项；保留历史发布证据。
+5. 保存交接：实际基线、分支/工作区、完成项、实测命令/结果、失败项、P4a 冻结契约、剩余依赖和下一就绪项。迟到结果、失效参考、迁移失败等用例失败时进入本项诊断和修复，不为普通失败另加审批。
+
+本轮没有认领、发评论、提交 PR 或发布授权。若后续需要通知维护者/贡献者，先完成面向具体 Issue 的认领或协作评论草稿；发布评论步骤标记为“等待用户针对目标 Issue 和最终文本的明确授权”，发送是独立步骤。提交主线时按 CONTRIBUTING 核对实际范围批准；准备材料可先做，推送、PR、合并和发布按届时用户授权执行。
+
+规划当时下一项为 P1；P5 的随机复习仍待产品范围确认。
+
+### 执行记录：主线程接管（2026-10-12）
+
+实际源码仍位于 `E:\Projects\Opensource\肥鱼笔记`，HEAD `72d2eb5`、分支 `feat/settings-split-cute-ui`。用户负责认领 Issue；本地实现没有代发认领、评论、推送、PR 或发布。原有 UiFlowTest 的 68 行改动，以及教程、输出和宣传脚本均保留。
+
+AGY 完成 #3/#4 初稿，第三次调用仅部分接入 #5 的 schema。主线程按用户要求停止 Pi 及其专属 ACP 进程，调用退出后接管；未把 AGY 自报成功当作验收。原调用证据保留在忽略目录 `build/agy-execution/20261012-issues-3-6/`。
+
+已完成本地代码：
+
+- P1：参考笔记空状态及课程/公共聊天对应的整理动作，模板选择器不显示该提示。
+- P2：课次标题手动编辑、显式提炼、候选确认；取消关闭、删除、忙碌和迟到结果处理，标题请求不写聊天条目。
+- P3：可折叠随堂记录、自动及显式保存、随问题附带开关、发送快照和重试；仅有随堂记录也可整理。
+- P4：UTF-8 Markdown 手册预览/编辑/阅读、目录、书签、参考开关、中文 FTS4 检索和请求联动。正文、章节、索引更新在同一事务；课程、来源版本及全文校验在数据层完成。知识块不跨课程，手册编辑/暂停/删除后的旧快照必须显式移除才能重试。
+- 数据库 v4 → v5 → v6 → v7，保留早期升级链。v7 兼容本地早期 v6 测试包尚未包含手册开关字段的情况，升级保留原文、索引和书签。单库隔离使用复合外键和课程约束；删除章节使书签失效，删除课程清除实体和索引。
+
+实现采用规划中的既有工具，无新增依赖。检索为中文双字及拉丁词的字面匹配，不承诺语义同义词检索。父章节的前提文字会带入子章节，按完整章节预算取舍。Markdown 显示范围见 spec 第 13 节；代码和表格保留可读原文。随堂记录默认附带，可关闭；课程手册保存后默认启用，可在手册页面暂停。模型输入仍由保存的用户 Entry 决定。
+
+已取得的定向证据：
+
+- JVM 单测及 app/test APK 编译通过，日志 `build/primary-build.log`。
+- API 36 定向仪器测试 18 项通过：真实 SQLite、Generator fake 请求和新界面；日志 `build/primary-targeted-tests.log`。
+- API 26 真实 SQLite 4 项通过：v4 迁移、手记/快照、数据库约束、课程隔离、来源与书签失效、中文检索；日志 `build/api26-course-tests.log`。
+- 中文问题 top-2 命中 20/20，5 个无关问题全部无命中；完整定理前提和公式保留。1,021,891 字节 / 1,000 章节 / 20 次查询：API 36 p95 95 ms，API 26 p95 113 ms。模拟器数据不代表真机性能。
+- 首轮 Full 测试 71 项中 2 项失败（正文重复分词导致 p95 1.15 秒、界面测试误用按钮文字），3 项可选测试跳过；修复后上述定向复测通过。最终 Full 回归待收口，不沿用失败的通过标记。
+
+最终验收使用合成资料和 fake 模型，不调用计费 API；真机、真实 DeepSeek 和折叠铰链仍未验证。#1 已发布功能保留，P5 随机知识卡片未进入本次执行。
+
+### 最终验收结果（2026-10-12）
+
+- `scripts/ci.ps1 -Full`：退出码 0；96 项 JVM 单测全部通过，API 36 设备测试 73 项（70 通过、3 可选测试跳过、0 失败）。包含标题候选确认、取消、随堂记录快照、手册阅读/目录/书签、课程隔离、来源删除后的迟到响应与既有功能回归。日志 `build/ci/gradle.log`、`build/ci/instrumented.log`。
+- API 26：`CourseFeatureTest,NotebookStoreTest` 共 31 项通过、0 跳过、0 失败，含 v1/v4/v6 升级、图片及来源关系、真实 SQLite/FTS、书签及课程约束。日志 `build/api26-course-tests.log`。近 1 MiB / 1,000 章节检索的已记录样本 p95：API 36 29 ms，API 26 27 ms；20 个中文问题命中 20/20，5 个无关问题无命中。
+- 窄屏测试曾选中正文内同名「导数」文字，导致目录未关闭，返回检查失败；限定可点击目录项并等待对话框退出后复测通过，未改动导航实现。手机和平板截图已检查，见 `build/ci/screenshots/course-handbook*.png`、`scratchpad*.png`。
+- Full 后仅把随堂记录入口限定在课程/刷题本，公共聊天保留既有入口；随后重新编译、跑 96 项单测，并定向验证公共聊天及课程随堂记录 2 项通过。日志 `build/primary-final-build.log`、`build/primary-final-ui-boundary.log`。其余实现沿用上述 Full 证据；源文件在 Full 期间有变更，因此不把旧 `full-passed` stamp 当作最终工作树证据。
+- `git diff --check` 通过；原有宣传流程测试完整保留。分支仍为 `feat/settings-split-cute-ui`，未提交、推送或发布。
+
+最终测试 APK：`dist/feiyu-notes-0.4.0-72d2eb5-dirty-debug.apk`，SHA256 `09CBD8434D6737DCEA88BC7D8BA8ED072DBCFA43B2A59AE036B2522ADDE02266`。这是本地 debug 构建，不更改已发布的版本。当前授权范围无剩余实现项。
+
+### 英文支持与提示词验收（2026-10-12）
+
+- 用户要求确认英文界面可用、内置 prompt 自动跟随应用语言，并授权推送 GitHub 运行 CI。继续使用 `feat/settings-split-cute-ui`，目标远端经核实为 `Yongzhaooo/FeiyuNote`；不触发标签发布。
+- `StudyPrompts` 集中提供中英文学习、聊天、整理、预装引导模板、动作说明和材料标签。英文请求使用 `<course-knowledge>` 与 `<class-notes>`；中文标签保持兼容。学生原始笔记、手册内容、自定义 prompt 和编辑过的模板保留原文。
+- `agy-assist` 使用配置的 Antigravity ACP `gemini-3.8-flash` / medium，仅审阅公开的 prompt 源码；exit 0 / ok true。参考 MyAgents creator 的输入、输出、边界和验证原则，主线程审阅后采纳英文聊天措辞、标题约束及中英文整理说明。支持仅有随堂记录的整理，保留条件和不确定性，不虚构对话或来源。预装模板文字不改，保留既有本地化判定。
+- 新增 JVM 用例验证英文材料包装、转义、中文学生笔记保留、仅记录整理与无伪造来源；新增设备流程验证英文手册、参考笔记空态、随堂记录、英文标题建议、整理及公共聊天实际请求，切回中文不触发请求且不覆盖自定义 prompt。另保留系统首选语言回退和中文界面的既有设备测试。
+- 本轮调试发现测试助手写死中文“确定”和摘要片段误用精确文本匹配，均在测试中修正；未更改产品导航来适配测试。
+- 证据：`build/prompt-review/result.json`、`build/english-build.log`、`build/english-ui-final.log`；提交 hook 运行构建及单测，推送 hook 运行全部设备测试。GitHub 使用既有 `android.yml` 的 `workflow_dispatch` 在本功能分支运行单测/debug 构建；最终结果以实际 Actions 运行记录为准。
+- 原有 promo 测试与 `docs/superpowers/`、`docs/tutorial/`、`output/`、`scripts/make-promo.py` 属于用户未提交工作，保留并排除本轮源码提交。
+- 英文针对性验收结果：97 项 JVM 单测通过（0 失败/错误/跳过）；新增英文设备流程通过，覆盖 4 次显式请求（学习、标题、整理、公共聊天）；系统德语首选→英文、繁体中文→中文的既有设备用例也通过。使用 fake 模型验证请求正文和调用数，不等同于真实模型输出质量验收。

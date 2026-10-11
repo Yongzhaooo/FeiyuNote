@@ -36,13 +36,13 @@ object ContextBuilder {
         val chain = ancestors(target, lessonEntries)
         val onChain = chain.associateBy { it.id }
 
-        val history = recent(chain.mapNotNull { e ->
+        val prior = chain.mapNotNull { e ->
             when {
                 e.kind == EntryKind.USER -> AiMessage(AiRole.USER, e.text.ifBlank { set.photoPlaceholder })
                 e.kind == EntryKind.ASSISTANT && e.state == EntryState.COMPLETE -> AiMessage(AiRole.ASSISTANT, e.text)
                 else -> null
             }
-        })
+        }
 
         // Own photo first, then user-selected photos from this chain only.
         val images = buildList {
@@ -58,22 +58,33 @@ object ContextBuilder {
             EntryAction.MISTAKE -> "${set.mistake}\n${set.myAnswer}${target.text.ifBlank { set.photoPlaceholder }}"
         }
 
-        val system = StudyPrompts.withTemplate(
+        var system = StudyPrompts.withTemplate(
             set,
             StudyPrompts.withReference(set, base, referenceNote?.text),
             template?.instruction,
         )
-        return AiInput(system, history + AiMessage(AiRole.USER, text, images))
+        val extra = target.requestContext
+        require(extra.version == 1 && extra.knowledge.size <= 2)
+        require(extra.scratchpad.orEmpty().length + extra.knowledge.sumOf { it.markdown.length + it.headingPath.length } <= 12_000) { "Context too large" }
+        if (extra.knowledge.isNotEmpty()) {
+            system += "\n${set.materialsRule}"
+            system += "\n<${set.courseKnowledgeTag}>\n" + extra.knowledge.joinToString("\n\n") { "[${escapeContext(it.headingPath)}]\n${escapeContext(it.markdown)}" } + "\n</${set.courseKnowledgeTag}>"
+        }
+        if (!extra.scratchpad.isNullOrBlank() && extra.knowledge.isEmpty()) system += "\n${set.materialsRule}"
+        val userText = if (extra.scratchpad.isNullOrBlank()) text else "<${set.classNotesTag}>\n${escapeContext(extra.scratchpad)}\n</${set.classNotesTag}>\n\n$text"
+        val remaining = HISTORY_CHAR_BUDGET - system.length - userText.length - 512
+        require(remaining >= 0) { "Context too large" }
+        val history = recent(prior, remaining)
+        return AiInput(system, history + AiMessage(AiRole.USER, userText, images))
     }
 
     /**
      * Summary of a lesson's completed Q&A, text only (spec §6). [lessonEntries] must already
      * exclude archived threads. Returns null when there is nothing completed to summarize.
      */
-    fun buildSummary(lessonEntries: List<Entry>, template: Template?, language: String = "zh", base: String = PromptKind.SUMMARY.default(language)): Pair<AiInput, List<Long>>? {
+    fun buildSummary(lessonEntries: List<Entry>, template: Template?, language: String = "zh", base: String = PromptKind.SUMMARY.default(language), scratchpad: String = ""): Pair<AiInput, List<Long>>? {
         val set = StudyPrompts.of(language)
         val answered = lessonEntries.filter { it.kind == EntryKind.ASSISTANT && it.state == EntryState.COMPLETE }
-        if (answered.isEmpty()) return null
         val byId = lessonEntries.associateBy { it.id }
         val lines = mutableListOf<String>()
         val sources = mutableListOf<Long>()
@@ -84,9 +95,11 @@ object ContextBuilder {
             lines += "[#${answer.id} ${set.answerTag}] ${answer.text}"
             sources += listOf(question.id, answer.id)
         }
-        if (sources.isEmpty()) return null
-        val system = StudyPrompts.withTemplate(set, base, template?.instruction)
-        val input = AiInput(system, listOf(AiMessage(AiRole.USER, set.lessonQa + "\n" + lines.joinToString("\n"))))
+        if (sources.isEmpty() && scratchpad.isBlank()) return null
+        val system = StudyPrompts.withTemplate(set, base, template?.instruction) + if (scratchpad.isBlank()) "" else "\n${set.materialsRule}"
+        val text = listOf(if (scratchpad.isBlank()) "" else "<${set.classNotesTag}>\n${escapeContext(scratchpad)}\n</${set.classNotesTag}>", set.lessonQa + "\n" + lines.joinToString("\n")).filter { it.isNotBlank() }.joinToString("\n\n")
+        require(system.length + text.length + 512 <= HISTORY_CHAR_BUDGET) { "Context too large" }
+        val input = AiInput(system, listOf(AiMessage(AiRole.USER, text)))
         return input to sources.distinct()
     }
 
@@ -108,4 +121,6 @@ object ContextBuilder {
         }
         return chain.toList()
     }
+
+    private fun escapeContext(text: String): String = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 }

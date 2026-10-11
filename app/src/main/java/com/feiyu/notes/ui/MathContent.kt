@@ -30,10 +30,10 @@ import kotlinx.coroutines.withContext
 
 /** Native text and formula images share the app's typography, theme and accessibility scaling. */
 @Composable
-fun MathContent(source: String, modifier: Modifier = Modifier) {
+fun MathContent(source: String, modifier: Modifier = Modifier, markdown: Boolean = false, textStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge) {
     val parts = remember(source) { MathText.parse(source) }
     val density = LocalDensity.current
-    val style = MaterialTheme.typography.bodyLarge
+    val style = textStyle
     val color = LocalContentColor.current
     val size = with(density) { style.fontSize.toPx() }
     val images by produceState<Map<Int, Bitmap>>(emptyMap(), source, size, color) {
@@ -89,7 +89,7 @@ fun MathContent(source: String, modifier: Modifier = Modifier) {
                             val text = buildAnnotatedString {
                                 indices.forEach { index ->
                                     if (images[index] != null) appendInlineContent(index.toString(), parts[index].raw)
-                                    else append(parts[index].raw)
+                                    else if (markdown) append(markdownText(parts[index].raw)) else append(parts[index].raw)
                                 }
                             }
                             if (text.isNotBlank()) Text(text, style = style, color = color, inlineContent = inline)
@@ -105,4 +105,19 @@ fun MathContent(source: String, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+private fun markdownText(source: String): androidx.compose.ui.text.AnnotatedString = buildAnnotatedString {
+    val expression = Regex("\\*\\*(.+?)\\*\\*|__(.+?)__|\\*([^*]+)\\*|_([^_]+)_")
+    var cursor = 0
+    expression.findAll(source).forEach { match ->
+        append(source.substring(cursor, match.range.first))
+        val bold = match.groupValues[1].isNotEmpty() || match.groupValues[2].isNotEmpty()
+        pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = if (bold) androidx.compose.ui.text.font.FontWeight.Bold else null,
+            fontStyle = if (bold) null else androidx.compose.ui.text.font.FontStyle.Italic))
+        append(match.groupValues.drop(1).first { it.isNotEmpty() })
+        pop()
+        cursor = match.range.last + 1
+    }
+    append(source.substring(cursor))
 }

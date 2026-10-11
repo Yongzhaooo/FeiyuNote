@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performScrollTo
@@ -496,6 +497,7 @@ class UiFlowTest {
         waitText("想聊什么都可以，直接在下方输入；也可以拍照或从相册选图来问。") // chat banner, not the study one
         waitText("dsf.low")
         waitText("整理对话")
+        assertTrue(compose.onAllNodesWithTag("toggle-scratchpad").fetchSemanticsNodes().isEmpty())
         ask("第一问")
         awaitAnswer("答案1")
         ask("第二问")
@@ -905,6 +907,181 @@ class UiFlowTest {
         waitText("可恢复的主题")
     }
 
+    @Test fun referencePickerShowsEmptyGuideWhenNoNotesAndHidesWhenNotesExist() {
+        createNotebook("新建课程", "参考笔记引导课")
+        click("参考笔记引导课")
+        click("新课次")
+
+        // Open reference picker when no notes exist
+        compose.onNodeWithTag("pick-reference").performClick()
+        compose.onNodeWithTag("reference-empty-hint").assertExists()
+        click("取消")
+
+        // Ask question and summarize to produce a note
+        ask("什么是连续？")
+        awaitAnswer("答案1")
+        click("整理本课")
+        click("开始整理")
+        awaitAnswer("笔记正文")
+
+        // Open reference picker again: hint must not exist because notes exist
+        compose.onNodeWithTag("pick-reference").performClick()
+        assertTrue(compose.onAllNodesWithTag("reference-empty-hint").fetchSemanticsNodes().isEmpty())
+        click("取消")
+    }
+
+    @Test fun lessonTitleRenameAndTopicSuggestionFlow() {
+        createNotebook("新建课程", "重命名测试课")
+        click("重命名测试课")
+        click("新课次")
+
+        // Click lesson title to open RenameLessonDialog
+        compose.onNodeWithTag("lesson-title").performClick()
+        compose.onNodeWithTag("rename-input").assertExists()
+        compose.onNodeWithTag("suggest-title").assertExists()
+
+        // Manual rename
+        compose.onNodeWithTag("rename-input").performTextClearance()
+        compose.onNodeWithTag("rename-input").performTextInput("微积分基础讲义")
+        compose.onNodeWithTag("rename-confirm").performClick()
+        waitText("微积分基础讲义")
+
+        // Ask question so excerpt can be formed
+        ask("什么是导数？")
+        awaitAnswer("答案1")
+
+        // Open rename dialog and suggest topic
+        mathReply = "极限与连续"
+        compose.onNodeWithTag("lesson-title").performClick()
+        compose.onNodeWithTag("suggest-title").performClick()
+        // Wait for suggestion to populate input
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasText("极限与连续", substring = true)).fetchSemanticsNodes().isNotEmpty()
+        }
+        click("取消")
+        compose.onNodeWithTag("lesson-title").performClick()
+        compose.onNodeWithTag("rename-input").assert(hasText("微积分基础讲义"))
+        mathReply = "微分与极限"
+        compose.onNodeWithTag("suggest-title").performClick()
+        compose.waitUntil(10000) { compose.onAllNodes(hasText("微分与极限", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("rename-confirm").performClick()
+        compose.waitUntil(10000) {
+            runBlocking { app.store.listLessons(app.store.listNotebooks().single().id).single().title.endsWith("微分与极限") }
+        }
+        val renamed = runBlocking { app.store.listLessons(app.store.listNotebooks().single().id).single() }
+        assertTrue(renamed.title.matches(Regex("\\d{4}-\\d{2}-\\d{2} 微分与极限")))
+        assertEquals(2, runBlocking { app.store.readEntries(renamed.id).size })
+        mathReply = null
+    }
+
+    @Test fun scratchpadSurvivesRotationAndSendIncludesLatestSnapshot() {
+        createNotebook("新建课程", "随堂记录课")
+        click("随堂记录课"); click("新课次")
+        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        compose.onNodeWithTag("scratchpad-input").performTextInput("老师刚说的完整条件")
+        hideKeyboard()
+        scenario!!.recreate()
+        compose.onNodeWithTag("scratchpad-input").assert(hasText("老师刚说的完整条件"))
+        screenshot("scratchpad-chat")
+        shell("wm size 1080x2300")
+        compose.onNodeWithTag("scratchpad-input").assert(hasText("老师刚说的完整条件"))
+        screenshot("scratchpad-phone")
+        compose.onNodeWithTag("attach-scratchpad").assertIsOn()
+        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        ask("这一步为何成立")
+        awaitAnswer("答案1")
+        assertTrue(inputs.single().messages.last().text.contains("老师刚说的完整条件"))
+        val lesson = runBlocking { app.store.listLessons(app.store.listNotebooks().single().id).single() }
+        assertEquals("老师刚说的完整条件", lesson.scratchpad)
+        assertEquals("老师刚说的完整条件", runBlocking { app.store.readEntries(lesson.id).first().requestContext.scratchpad })
+    }
+
+    @Test fun englishCourseFeaturesAndBuiltInPromptsFollowAppLanguage() {
+        app.prefs.setLanguage(com.feiyu.notes.settings.UiLanguage.EN)
+        scenario!!.recreate()
+        waitText("Feiyu Notes")
+        click("New course")
+        compose.onNodeWithTag("notebook-name").performTextInput("Calculus")
+        click("Confirm")
+        click("Calculus"); click("Handbook")
+        compose.onNodeWithTag("edit-document").performClick()
+        compose.onNodeWithTag("document-input").performTextInput("# Limits\n\nAssume continuity before taking a limit.")
+        hideKeyboard()
+        compose.onNodeWithTag("save-document").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("document-reader").fetchSemanticsNodes().isNotEmpty() }
+        systemBack(); click("New session")
+        compose.onNodeWithTag("pick-reference").performClick()
+        compose.onNodeWithTag("reference-empty-hint").assert(hasText("Summarize", substring = true))
+        click("Cancel")
+        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        compose.onNodeWithTag("scratchpad-input").performTextInput("Assume x < 3")
+        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        ask("Explain limits")
+        awaitAnswer("答案1")
+        assertTrue(inputs.single().systemText.startsWith(com.feiyu.notes.study.PromptKind.STUDY.default("en")))
+        assertTrue(inputs.single().systemText.contains(com.feiyu.notes.study.StudyPrompts.of("en").guided))
+        assertTrue(inputs.single().systemText.contains("<course-knowledge>"))
+        assertTrue(inputs.single().messages.last().text.contains("<class-notes>"))
+        assertTrue(!inputs.single().systemText.any { it in '\u4e00'..'\u9fff' })
+        screenshot("course-features-en")
+        mathReply = "Limits and Continuity"
+        compose.onNodeWithTag("lesson-title").performClick()
+        compose.onNodeWithTag("suggest-title").performClick()
+        waitSubstring("Limits and Continuity")
+        compose.onNodeWithTag("rename-confirm").performClick()
+        waitSubstring("Limits and Continuity")
+        assertTrue(inputs.last().systemText.contains("2 to 6 words"))
+        mathReply = "Q: Which assumption is needed?\nA: Continuity."
+        click("Summarize"); click("Create notes")
+        waitSubstring("Which assumption is needed?")
+        compose.waitUntil(15_000) { app.generator.status.value.running == null }
+        assertTrue(inputs.last().systemText.startsWith(com.feiyu.notes.study.PromptKind.SUMMARY.default("en")))
+        assertTrue(inputs.last().messages.single().text.contains("<class-notes>"))
+        assertEquals(3, inputs.size)
+        // General chat uses the same application language when assembling the actual request.
+        val general = runBlocking { app.store.generalChat() }
+        runBlocking { app.generator.ask(general.notebookId, com.feiyu.notes.data.Entry(0, general.id, EntryKind.USER, com.feiyu.notes.data.EntryAction.ASK, "Hello Yuyu")) }
+        compose.waitUntil(15_000) { inputs.size == 4 && app.generator.status.value.running == null }
+        assertTrue(inputs.last().systemText.startsWith(com.feiyu.notes.study.PromptKind.GENERAL.default("en")))
+        assertTrue(!inputs.last().systemText.any { it in '\u4e00'..'\u9fff' })
+        // Explicit application language wins over the Chinese system locale; changing it makes no request.
+        app.prefs.setPrompt(com.feiyu.notes.study.PromptKind.GENERAL, "My own custom prompt")
+        app.prefs.setLanguage(com.feiyu.notes.settings.UiLanguage.ZH)
+        scenario!!.recreate()
+        waitText("发送")
+        assertEquals(com.feiyu.notes.study.PromptKind.STUDY.default("zh"), app.prefs.prompt(com.feiyu.notes.study.PromptKind.STUDY, "zh"))
+        assertEquals("My own custom prompt", app.prefs.prompt(com.feiyu.notes.study.PromptKind.GENERAL, "zh"))
+        assertEquals(4, inputs.size)
+    }
+
+    @Test fun handbookEditingOutlineBookmarkAndQuestionRetrievalFlow() {
+        createNotebook("新建课程", "手册测试课")
+        click("手册测试课"); click("课程手册")
+        compose.onNodeWithTag("edit-document").performClick()
+        compose.onNodeWithTag("document-input").performTextInput("# 极限\n\n前提：连续函数。**完整条件**与公式 $$ x^2 $$\n\n# 导数\n\n导数定义")
+        hideKeyboard()
+        scenario!!.recreate()
+        compose.onNodeWithTag("document-input").assert(hasText("完整条件", substring = true))
+        compose.onNodeWithTag("save-document").performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("document-reader").fetchSemanticsNodes().isNotEmpty() }
+        screenshot("course-handbook")
+        shell("wm size 1080x2300")
+        compose.onNodeWithTag("document-reader").assertExists()
+        screenshot("course-handbook-phone")
+        compose.onAllNodesWithText("收藏这一节")[0].performClick()
+        click("书签"); waitText("极限"); click("知道了")
+        click("目录")
+        compose.onNode(hasText("导数") and hasClickAction()).performClick()
+        compose.waitUntil(10000) { compose.onAllNodes(hasText("导数") and hasClickAction()).fetchSemanticsNodes().isEmpty() }
+        systemBack()
+        screenshot("handbook-after-back")
+        click("新课次")
+        ask("极限怎么求")
+        awaitAnswer("答案1")
+        assertTrue(inputs.single().systemText.contains("<课程知识>"))
+        assertTrue(inputs.single().systemText.contains("前提：连续函数"))
+        assertEquals(1, inputs.size)
+    }
 
     private fun assertSecure(expected: Boolean) {
         compose.waitForIdle()

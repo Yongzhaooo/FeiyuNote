@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -75,12 +76,60 @@ class StudyViewModel(
     val referenceId = handle.getStateFlow(REFERENCE, NONE)
     val templateOverride = handle.getStateFlow(TEMPLATE_OVERRIDE, false)
     val templateChoice = handle.getStateFlow(TEMPLATE, NONE)
+    private var scratchpadEdited = handle.contains("scratchpad")
+    private var scratchpadLoadFailed = false
+    private val scratchpadLoaded = kotlinx.coroutines.CompletableDeferred<Unit>()
+    val scratchpad = handle.getStateFlow("scratchpad", "")
+    val attachScratchpad = handle.getStateFlow("attachScratchpad", true)
+    val knowledgePreview = kotlinx.coroutines.flow.combine(draft, store.changes) { text, _ -> text }
+        .map { store.searchCourseKnowledge(notebookId, it) }
+        .catch { _notice.value = context.getString(R.string.knowledge_unavailable); emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val scratchpadLock = kotlinx.coroutines.sync.Mutex()
+    private var scratchpadSave: kotlinx.coroutines.Job? = null
 
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
     init {
         app.prefs.setLastLesson(notebookId, lessonId)
+        viewModelScope.launch {
+            try {
+                val lesson = store.getLesson(lessonId)
+                if (!scratchpadEdited) handle["scratchpad"] = lesson?.scratchpad.orEmpty()
+            } catch (e: Exception) { scratchpadLoadFailed = true; _notice.value = context.getString(R.string.save_failed) }
+            finally { scratchpadLoaded.complete(Unit) }
+        }
+    }
+
+    fun setScratchpad(value: String) {
+        scratchpadEdited = true
+        handle["scratchpad"] = value
+        scratchpadSave?.cancel()
+        scratchpadSave = viewModelScope.launch { kotlinx.coroutines.delay(500); persistScratchpad() }
+    }
+
+    fun setAttachScratchpad(value: Boolean) { handle["attachScratchpad"] = value }
+
+    /** App scope lets navigation finish the last save even when the screen's ViewModel is cleared. */
+    fun saveScratchpad() = app.appScope.launch { persistScratchpad() }
+
+    private suspend fun persistScratchpad(): Boolean {
+        scratchpadLoaded.await()
+        if (scratchpadLoadFailed && !scratchpadEdited) return false
+        scratchpadLock.lock()
+        try {
+            return try {
+                withContext(kotlinx.coroutines.NonCancellable) {
+                    val ok = store.updateScratchpad(notebookId, lessonId, scratchpad.value)
+                    if (!ok) _notice.value = context.getString(R.string.save_failed)
+                    ok
+                }
+            } catch (e: Exception) {
+                _notice.value = context.getString(R.string.save_failed)
+                false
+            }
+        } finally { scratchpadLock.unlock() }
     }
 
     fun setDraft(value: String) { handle[DRAFT] = value }
@@ -189,19 +238,26 @@ class StudyViewModel(
         if (_importing.value || _sending.value) return@launch
         _sending.value = true
         try {
+            if (!persistScratchpad()) return@launch
+            val scratchpadSnapshot = scratchpad.value.takeIf { attachScratchpad.value && it.isNotBlank() }
+            val questionText = draft.value.trim()
+            var knowledge = store.searchCourseKnowledge(notebookId, questionText)
+            // Keep complete sections; the explicit scratchpad has priority within the extras budget.
+            while (knowledge.isNotEmpty() && scratchpadSnapshot.orEmpty().length + knowledge.sumOf { it.markdown.length + it.headingPath.length } > 12_000) knowledge = knowledge.dropLast(1)
             val act = EntryAction.valueOf(action.value)
             val question = Entry(
                 id = 0,
                 lessonId = lessonId,
                 kind = EntryKind.USER,
                 action = act,
-                text = draft.value.trim(),
+                text = questionText,
                 parentEntryId = parentId.value.orNull() ?: if (notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID)
                     store.readEntries(lessonId).lastOrNull { it.kind == EntryKind.ASSISTANT && it.state == EntryState.COMPLETE }?.id else null,
                 sourceEntryIds = listOfNotNull(referenceId.value.orNull()),
                 imagePaths = photoNames.value.toList(),
                 attachedImageEntryIds = attached.value.toList(),
                 templateId = effectiveTemplateId(),
+                requestContext = TurnContext(scratchpad = scratchpadSnapshot, knowledge = knowledge),
             )
             if (act == EntryAction.MISTAKE && question.text.isBlank() && question.imagePaths.isEmpty()) {
                 _notice.value = context.getString(R.string.solution_required)
@@ -218,19 +274,44 @@ class StudyViewModel(
                 StartResult.Busy -> _notice.value = BUSY
                 is StartResult.Invalid -> _notice.value = result.message
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _notice.value = context.getString(R.string.knowledge_unavailable)
         } finally {
             _sending.value = false
         }
     }
 
     /** Retries with the question's own template; [templateId] replaces it when the old one is gone. */
-    fun retry(userEntryId: Long, replaceTemplate: Boolean = false, templateId: Long? = null) = viewModelScope.launch {
+    fun retry(userEntryId: Long, replaceTemplate: Boolean = false, templateId: Long? = null, removeKnowledge: Boolean = false) = viewModelScope.launch {
+        if (removeKnowledge) store.clearEntryKnowledge(notebookId, userEntryId)
         if (replaceTemplate) store.setEntryTemplate(userEntryId, templateId)
         report(generator.retry(notebookId, userEntryId))
     }
 
     fun summarize(templateId: Long?) = viewModelScope.launch {
+        if (!persistScratchpad()) return@launch
         report(generator.summarize(notebookId, lessonId, templateId))
+    }
+
+    fun suggestTitle() = viewModelScope.launch {
+        report(generator.suggestTitle(notebookId, lessonId))
+    }
+
+    fun cancelTitle() = generator.cancelTitle(lessonId)
+
+    fun clearTitleSuggestion() = generator.clearTitleSuggestion()
+
+    fun renameLesson(newTitle: String, onSaved: (Boolean) -> Unit = {}) = viewModelScope.launch {
+        val trimmed = newTitle.trim()
+        if (trimmed.isNotBlank()) {
+            try {
+                val ok = store.renameLesson(lessonId, trimmed)
+                if (!ok) _notice.value = context.getString(R.string.save_failed)
+                onSaved(ok)
+            } catch (e: Exception) { _notice.value = context.getString(R.string.save_failed); onSaved(false) }
+        }
     }
 
     fun cancel() = generator.cancel()
