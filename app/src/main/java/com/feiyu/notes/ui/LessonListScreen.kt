@@ -63,7 +63,7 @@ fun LessonListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(notebook?.name ?: "") },
+                title = { Text(notebook?.name ?: "", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
                 navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), onBack) },
                 actions = {
                     if (!practice && notebookId != NotebookStore.GENERAL_ID && onOpenHandbook != null) TextButton(onClick = onOpenHandbook) { Text(context.getString(R.string.course_handbook)) }

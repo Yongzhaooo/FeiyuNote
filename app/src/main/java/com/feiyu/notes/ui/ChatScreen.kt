@@ -239,7 +239,7 @@ fun ChatScreen(
 
     if (summarizing && d != null) ChoiceDialog(
         title = context.getString(if (vm.lessonId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) R.string.summary_template_chat else R.string.summary_template),
-        options = d.templates.map { it.id to it.name },
+        options = d.templates.map { it.id to it.displayName(context) },
         selected = null,
         noneLabel = context.getString(R.string.summary_default),
         confirmLabel = context.getString(R.string.start_summary),
@@ -249,7 +249,7 @@ fun ChatScreen(
     retryTemplateFor?.let { userId ->
         ChoiceDialog(
             title = context.getString(R.string.retry_template),
-            options = d?.templates.orEmpty().map { it.id to it.name },
+            options = d?.templates.orEmpty().map { it.id to it.displayName(context) },
             selected = null,
             noneLabel = context.getString(R.string.no_template),
             confirmLabel = context.getString(R.string.retry),
@@ -455,7 +455,7 @@ private fun UserMeta(entry: Entry, all: List<Entry>, templates: List<Template>) 
     val parts = buildList {
         if (entry.attachedImageEntryIds.isNotEmpty()) add(context.getString(R.string.attached_count, all.filter { it.id in entry.attachedImageEntryIds }.sumOf { it.imagePaths.size }))
         entry.sourceEntryIds.firstOrNull()?.let { add(context.getString(R.string.reference_number, it)) }
-        entry.templateId?.let { id -> add(templates.firstOrNull { it.id == id }?.let { context.getString(R.string.template_name, it.name) } ?: context.getString(R.string.template_deleted)) }
+        entry.templateId?.let { id -> add(templates.firstOrNull { it.id == id }?.let { context.getString(R.string.template_name, it.displayName(context)) } ?: context.getString(R.string.template_deleted)) }
     }
     if (parts.isNotEmpty()) Text(parts.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
 }
@@ -601,7 +601,7 @@ private fun Composer(
             val refName = referenceNotes.firstOrNull { it.id == referenceId }?.let { context.getString(R.string.reference_selected, it.id) } ?: context.getString(R.string.reference_none)
             TextButton(onClick = { pickReference = true }, modifier = Modifier.testTag("pick-reference")) { Text(refName) }
             val effective = if (templateOverride) templateChoice.takeIf { it > 0 } else defaultTemplateId
-            val tName = effective?.let { id -> templates.firstOrNull { it.id == id }?.name } ?: context.getString(R.string.none)
+            val tName = effective?.let { id -> templates.firstOrNull { it.id == id }?.displayName(context) } ?: context.getString(R.string.none)
             TextButton(onClick = { pickTemplate = true }) { Text(context.getString(if (!templateOverride && effective != null) R.string.template_default_name else R.string.template_name, tName)) }
             SessionModel(vm.lessonId, busy)
         }
@@ -663,7 +663,7 @@ private fun Composer(
     )
     if (pickTemplate) ChoiceDialog(
         title = context.getString(R.string.choose_template),
-        options = templates.map { it.id to it.name },
+        options = templates.map { it.id to it.displayName(context) },
         selected = if (templateOverride) templateChoice.takeIf { it > 0 } else defaultTemplateId,
         noneLabel = context.getString(R.string.no_template),
         confirmLabel = context.getString(R.string.confirm),

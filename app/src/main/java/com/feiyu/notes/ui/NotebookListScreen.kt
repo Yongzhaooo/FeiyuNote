@@ -233,7 +233,7 @@ private fun NotebookDialog(
                     ChoiceChips(options = courses.map { it.id to it.name }, selected = linked, onSelect = { linked = it })
                 }
                 Text(context.getString(R.string.default_template), style = MaterialTheme.typography.labelLarge)
-                ChoiceChips(options = templates.map { it.id to it.name }, selected = template, onSelect = { template = it })
+                ChoiceChips(options = templates.map { it.id to it.displayName(context) }, selected = template, onSelect = { template = it })
             }
         },
         confirmButton = {
