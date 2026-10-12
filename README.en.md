@@ -14,7 +14,7 @@ Download a preview APK from [Releases](https://github.com/Yongzhaooo/FeiyuNote/r
 
 1. Open Settings after installation and tap "DeepSeek key" at the top.
 2. Create an API key on the [DeepSeek platform](https://platform.deepseek.com/api_keys), paste it on the key page and tap Save. API usage is billed by DeepSeek; monitor your own account balance and pricing.
-3. Create a course and session. Type a question, take a photo, or choose an image, then tap Send. Tap "Summarize session" to generate study notes.
+3. Create a course and session. Type a question, take a photo, or choose an image, then tap Send. Tap "Summarize" to generate study notes.
 
 Notes, photos, and conversations are stored locally on your device. Sending a request transmits the selected text, context, and attached images to DeepSeek.
 
@@ -23,14 +23,15 @@ API keys use AES-256-GCM encryption in private storage, with non-exportable encr
 ## Screenshots
 
 <p>
-<img src="docs/screenshots/0.4/home.png" width="180" alt="Home">
-<img src="docs/screenshots/0.4/study-chat.png" width="180" alt="Course Q&amp;A with formulas">
-<img src="docs/screenshots/0.4/yuyu-chat.png" width="180" alt="Chatting with Yuyu">
-<img src="docs/screenshots/0.4/settings.png" width="180" alt="Settings">
-<img src="docs/screenshots/0.4/home-dark.png" width="180" alt="Home in dark mode">
+<img src="docs/screenshots/0.5/en/home.png" width="180" alt="English home screen">
+<img src="docs/screenshots/0.5/en/handbook.png" width="180" alt="Course handbook with formulas">
+<img src="docs/screenshots/0.5/en/class-notes.png" width="180" alt="Class notes and relevant handbook sections">
+<img src="docs/screenshots/0.5/en/title.png" width="180" alt="Explicit lesson topic suggestion">
+<img src="docs/screenshots/0.5/en/study-chat.png" width="180" alt="Course Q&amp;A with formulas">
+<img src="docs/screenshots/0.5/en/reference.png" width="180" alt="Guidance when reference notes are empty">
 </p>
 
-Courses and answers in the screenshots are demo content produced by mock replies in tests (Chinese UI).
+Screenshots show the actual app. Courses, handbooks, class notes and answers are synthetic test content; replies come from a mock model. [View the Chinese screenshots](README.md#界面预览).
 
 ## Interface and features
 
@@ -38,9 +39,14 @@ Courses and answers in the screenshots are demo content produced by mock replies
 - Single-pane layout on phones, two-pane layout on large screens; light and dark themes.
 - Each session keeps a randomly selected whale-girl portrait; custom avatars are available in Settings.
 - Notes support offline reading, edit/preview modes, HTML export, and system sharing.
+- Course handbooks: import or write one UTF-8 Markdown document per course (up to 1 MiB and 1,000 headings), with contents, bookmarks and offline reading. Headings, lists, emphasis and formulas render natively; code and tables remain readable source. Sending a question searches complete sections from that course locally. Pause handbook reference from the reader.
+- Class notes: take notes inside a session with autosave, choose whether to attach them to questions, and include them when summarizing. Failed requests retry with the saved snapshot. If the handbook changes or is deleted, explicitly remove the old excerpts before retrying, or ask a new question.
+- Tap a session title to rename it manually or request a topic suggestion, then confirm it while keeping the date. An empty reference picker points you to Summarize.
 - Version 0.2 renders LaTeX offline: inline `$...$` or `\(...\)`, and display `$$...$$` or `\[...\]`. Common fractions, roots, integrals, and matrices are supported; wide formulas scroll horizontally. Copying preserves formula source, and HTML exports embed formula images. Unsupported syntax falls back to raw text. Full TeX documents and custom macros are not supported.
 
 ## Version history
+
+- **[0.5.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.5.0)**: Course handbooks with contents, bookmarks and local full-text search within each course; autosaved class notes that can accompany questions and summaries; manual session renaming and explicit topic suggestions; and guidance in the empty reference picker. Built-in prompts and preinstalled template names and instructions follow the app language, while user edits are preserved. Upgrades retain courses, conversations, photos, review records and settings.
 
 - **[0.4.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.4.0)**: A whale-girl colour scheme with rounder cards, retuned for light and dark; stickers on empty lists, typing dots while an answer is generated, and a floating button for new sessions. The DeepSeek key has its own page, the only screen that blocks screenshots; the top of Settings shows the key status and the discussion group (QQ group 1079399140, one tap to copy). Chat or study can be turned off on its own: with only chat on, the home screen is just the general chat. The general chat assistant is now "Yuyu", a soft and caring companion who calls you "User-chan". Built-in prompts and the unedited "Guided explanation" template follow the app language (Chinese or English). The independent download page is restyled and lists the discussion group.
 - **[0.3.3](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.3)**: Course review records. Add a completed answer or note to review, or create a record manually. Edit, delete, filter by status, mark Pending / Understood / Still confused, and return to the source. Deleted sources are marked while the review text is kept. Records stay within their course, and all review operations run locally without extra model requests.

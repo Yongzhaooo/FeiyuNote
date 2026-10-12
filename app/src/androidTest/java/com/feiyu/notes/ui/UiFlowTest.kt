@@ -577,6 +577,76 @@ class UiFlowTest {
         screenshot("showcase-home-dark")
     }
 
+    @Test fun release05ScreenshotsZh() = captureRelease05("zh")
+
+    @Test fun release05ScreenshotsEn() = captureRelease05("en")
+
+    /** Real UI with synthetic class materials and replies; opt in with `-e release05 true`. */
+    private fun captureRelease05(language: String) {
+        org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("release05") == "true")
+        val chinese = language == "zh"
+        app.prefs.setLanguage(if (chinese) com.feiyu.notes.settings.UiLanguage.ZH else com.feiyu.notes.settings.UiLanguage.EN)
+        app.prefs.setTheme(com.feiyu.notes.settings.ThemeMode.LIGHT)
+        scenario!!.close()
+        shell("wm size 1080x2300")
+        launch()
+        val context = com.feiyu.notes.settings.AppLanguage.context(app)
+        val course = if (chinese) "高等数学" else "Calculus"
+        click(context.getString(com.feiyu.notes.R.string.new_course))
+        compose.onNodeWithTag("notebook-name").performTextInput(course)
+        click(context.getString(com.feiyu.notes.R.string.confirm))
+        screenshot("release05-$language-home")
+        click(course)
+        click(context.getString(com.feiyu.notes.R.string.course_handbook))
+        compose.onNodeWithTag("edit-document").performClick()
+        val handbook = if (chinese) {
+            "# 极限与连续\n\n极限描述函数值趋近的结果。使用定理时保留全部前提。\n\n## 连续函数\n\n如果函数 f 在 a 处**连续**，可以直接代入。\n\n$$ \\lim_{x\\to a} f(x)=f(a) $$\n\n例如 f(x)=x²，a=2 时，极限为 4。\n\n## 常见易错点\n\n先检查公式的适用条件。分母为零时需要另作论证。"
+        } else {
+            "# Limits and continuity\n\nA limit describes the value a function approaches. Keep all assumptions.\n\n## Continuous functions\n\nIf f is **continuous at a**, substitute x=a.\n\n$$ \\lim_{x\\to a} f(x)=f(a) $$\n\nFor f(x)=x² and a=2, the limit is 4.\n\n## Common pitfalls\n\nCheck the conditions first. A zero denominator needs another argument."
+        }
+        compose.onNodeWithTag("document-input").performTextInput(handbook)
+        hideKeyboard()
+        compose.onNodeWithTag("save-document").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("document-reader").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("math-display", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText(context.getString(com.feiyu.notes.R.string.document_add_bookmark))[0].performClick()
+        screenshot("release05-$language-handbook")
+        systemBack()
+        click(context.getString(com.feiyu.notes.R.string.new_session, context.getString(com.feiyu.notes.R.string.session)))
+        compose.onNodeWithTag("pick-reference").performClick()
+        compose.onNodeWithTag("reference-empty-hint").assertExists()
+        screenshot("release05-$language-reference")
+        click(context.getString(com.feiyu.notes.R.string.cancel))
+        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        val notes = if (chinese) "老师强调：先检查函数在该点连续。\n极限运算前列出适用条件。\n分母为零时不要直接代入。" else
+            "Check continuity at the point first.\nState the conditions before taking limits.\nDo not substitute into a zero denominator."
+        compose.onNodeWithTag("scratchpad-input").performTextInput(notes)
+        val question = if (chinese) "为什么 x² 在 x→2 时的极限是 4？" else "Why is the limit of x² as x→2 equal to 4?"
+        typeDraft(question)
+        hideKeyboard()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("knowledge-preview").fetchSemanticsNodes().isNotEmpty() }
+        screenshot("release05-$language-class-notes")
+        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        mathReply = if (chinese) "函数 x² 在 x=2 处连续，所以可以直接代入。\n\\[\\lim_{x\\to 2}x^2=2^2=4\\]\n这里使用的是连续函数的极限定理。" else
+            "The function x² is continuous at x=2, so substitution is valid.\n\\[\\lim_{x\\to 2}x^2=2^2=4\\]\nThis uses the limit rule for continuous functions."
+        compose.onNodeWithTag("send").performClick()
+        hideKeyboard()
+        waitSubstring(if (chinese) "这里使用" else "This uses")
+        compose.waitUntil(15_000) { app.generator.status.value.running == null }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("math-display", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(inputs.single().systemText.contains(if (chinese) "<课程知识>" else "<course-knowledge>"))
+        val topic = if (chinese) "极限与连续" else "Limits and Continuity"
+        mathReply = topic
+        compose.onNodeWithTag("lesson-title").performClick()
+        compose.onNodeWithTag("suggest-title").performClick()
+        waitSubstring(topic)
+        screenshot("release05-$language-title")
+        compose.onNodeWithTag("rename-confirm").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("rename-confirm").fetchSemanticsNodes().isEmpty() }
+        screenshot("release05-$language-study-chat")
+        assertEquals(2, inputs.size)
+    }
+
     @Test fun chatOrStudyCanBeTurnedOffButNotBoth() {
         waitText("新建课程")
         compose.onNodeWithTag("general-chat").assertExists()
