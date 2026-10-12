@@ -493,3 +493,12 @@ AGY 完成 #3/#4 初稿，第三次调用仅部分接入 #5 的 schema。主线�
 - GitHub 签名 APK 验证 0.5.0 / 10、minSdk 26、debuggable=false、证书与 0.4.0 一致后，用 `scripts/publish-download.ps1` 更新 `yz_vps:/srv/feiyunote`；顺序为 APK、下载页、更新索引，索引最后原子切换。核对两渠道 SHA-256、线上版本及下载响应。最终交付状态以 PR、tag Actions 和 Release 记录为准。
 - 不调用真实 DeepSeek，不改签名 Secrets，不在用户真机安装。历史 APK 和原工作区数据保留。
 - 双语截图专项验收：2 项设备流程通过，12 张截图逐页复核，英文手册公式已等待渲染完成后采集；构建及 JVM 单测通过。
+
+### 0.5.0 发布结果
+
+- [PR #7](https://github.com/Yongzhaooo/FeiyuNote/pull/7) 已于 2026-10-12 合并，提交 `75345a8fc83f16ae744bb2462cb54462205bdb6a`；`v0.5.0` 指向该提交，树与本地 Full 验收一致。#3—#6 随 PR 关闭；[#1 交付说明](https://github.com/Yongzhaooo/FeiyuNote/issues/1#issuecomment-6115492593) 补充原需求已完成后关闭，五项均为 completed。
+- 本次构建、97 JVM 单测通过；Full 为 75 项设备测试（71 通过、4 项可选截图测试跳过、0 失败），7 个测试类。双语截图专项另行运行 2 项并通过，`docs/screenshots/0.5/zh`、`en` 各六张 1080×2300 PNG。
+- [PR CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/38187162298)、[合并 main CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/38187309779)、[tag 构建与签名发布 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/38187332681) 均通过。[GitHub v0.5.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.5.0) 已发布为既有早期预览版，双语发布说明与六个截图嵌入已核对。
+- 签名 APK：`com.feiyu.notes`，0.5.0 / versionCode 10，minSdk 26，debuggable=false，24,518,432 字节。证书 SHA-256 为 `10caccf58d2573b5e48caa2d459e73f1dcd4fc0ca06eb2bbeb726b4c1b99d88b`，与 0.4.0 一致。APK SHA-256 为 `18942a52691510304469182d97e6b284c4350c00194f605e860c0688ce73ea66`。
+- 使用既有脚本发布到 `yz_vps:/srv/feiyunote`。[下载页](https://feiyunote.cangming.fyi/feiyu/)、[APK](https://feiyunote.cangming.fyi/feiyu/feiyu-notes-0.5.0.apk) 与[更新索引](https://feiyunote.cangming.fyi/updates/android.json) 均 HTTP 200；索引为 0.5.0 / 10、minSdk 26，含中英文更新摘要，Cache-Control 为 no-cache。重新下载独立站 APK 后，SHA-256 与 GitHub 产物完全一致。
+- 本地证据：`build/ci/instrumented.log`、`build/ci/full-passed`、`build/release05/screenshots.log`、`build/release05/artifact-verification.json`、`build/release05/live-index.json`；原目录用户未提交工作保持原状。

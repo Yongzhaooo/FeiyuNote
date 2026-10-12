@@ -2,11 +2,9 @@
 
 **Project outcome:** 面向可拍照的移动设备提供随手记录方案；在安卓手机、平板或折叠屏上按课程、课次拍照或选图提问，获得 DeepSeek 讲解并整理成本地笔记，刷题本记录错题与掌握状态。[1.0 目标](plan.md#10-稳定开发目标)是现有 Android 应用的稳定开发；[2.0 长期目标](plan.md#20-ios-长期目标)为 iOS 支持，尚未启动。[spec](spec.md) 定义产品规则，[plan](plan.md) 保存实现边界与验证证据。
 
-**Current answer:** 2026-10-06，[0.4.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.4.0) 已发布：设置拆分、鲸鱼娘界面、聊天/学习开关、提示词随语言切换和公共聊天“鱼鱼”人设。GitHub 预览版与独立下载站使用同一签名 APK，更新索引为 0.4.0。发布与验证证据见 [plan](plan.md#040-发布)。真实 DeepSeek 下的鱼鱼语气、真实折叠态仍待验证。
+**Current answer:** 2026-10-12，[0.5.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.5.0) 已发布：课程手册与本地检索、随堂记录、课次标题建议、参考笔记引导及中英文内置 prompt / 预装模板显示。PR #7 已合并，#1、#3—#6 已关闭；中英文 README 各含六张截图。GitHub 与独立下载站使用同一签名 APK，更新索引为 0.5.0 / 10。97 JVM 单测、71 设备回归与双语截图专项通过，PR / main / tag CI 通过；证据见 [plan](plan.md#050-发布结果)。真实 DeepSeek 与真实折叠态仍待验证。
 
 ## Next actions
-
-- **0.5.0 发布交付（2026-10-12）** — 用户已授权 PR、关闭已完成 Issues 和发布。#3—#6 已实现；#1 已随 0.3.3 交付，随机知识卡片留待后续。英文请求与界面已验收，[功能 CI](https://github.com/Yongzhaooo/FeiyuNote/actions/runs/38185965728) 通过。中英文记录与截图、版本 0.5.0 / 10 在 `codex/release-0-5` 准备；PR 通过后合入 main，tag 工作流签名发布，再同步独立下载及更新索引。恢复入口见 [plan 发布记录](plan.md#050-发布2026-10-12)，最终状态核对 GitHub PR / v0.5.0 Actions / Release。
 
 - **鲸鱼娘贴纸打标签与自定义鱼鱼头像（待做）** — 头像和贴纸目前随机抽取，和场景、情绪对不上；计划给图片加标签按用途挑选，并考虑允许用户自定义鱼鱼头像。已记入 README 待做，范围未定。
 
@@ -28,6 +26,8 @@
 - **Skill 应用内工具扩展** — 当前文字模板已够用，长期目标为调用受控的应用内工具；依据见 [spec 后续方向](spec.md#10-后续方向)。触发条件：用户提出具体的多步学习需求；届时围绕首条完整流程确定工具与验收范围。当前不启动框架实现，不纳入 0.3.2。
 
 ## Done (rolling)
+
+- **0.5.0 课程学习功能（2026-10-12）** — [PR #7](https://github.com/Yongzhaooo/FeiyuNote/pull/7) 与五个 Issues 已完成，双语说明和截图随 [v0.5.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.5.0) 双渠道发布；签名、SHA-256 和更新索引核验见 [plan](plan.md#050-发布结果)。
 
 - **0.4.0 界面与设置（2026-10-06）** — 设置拆分、鲸鱼娘界面、功能开关、提示词本地化与鱼鱼人设随 [v0.4.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.4.0) 双渠道发布；证据见 [plan](plan.md#040-发布)。
 - **0.3.3 课程复习记录（2026-10-06）** — PR #2 已合并，复习记录、迁移、来源回查与删除标记通过完整本地 CI；双栏返回用例已修正。GitHub 预览版和独立下载站均已发布，更新索引为 0.3.3；证据见 [plan](plan.md#033-课程复习发布验证)。
