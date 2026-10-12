@@ -49,6 +49,7 @@ fun LessonListScreen(
     onOpen: (Lesson) -> Unit,
     onBack: () -> Unit,
     onOpenReview: (() -> Unit)? = null,
+    onOpenHandbook: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val notebook by rememberStoreValue(store, notebookId) { getNotebook(notebookId) }
@@ -62,9 +63,10 @@ fun LessonListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(notebook?.name ?: "") },
+                title = { Text(notebook?.name ?: "", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
                 navigationIcon = { ActionIcon(R.drawable.ic_back, context.getString(R.string.back), onBack) },
                 actions = {
+                    if (!practice && notebookId != NotebookStore.GENERAL_ID && onOpenHandbook != null) TextButton(onClick = onOpenHandbook) { Text(context.getString(R.string.course_handbook)) }
                     if (!practice && notebookId != com.feiyu.notes.data.NotebookStore.GENERAL_ID && onOpenReview != null) {
                         TextButton(onClick = onOpenReview) {
                             Text(context.getString(R.string.course_review))

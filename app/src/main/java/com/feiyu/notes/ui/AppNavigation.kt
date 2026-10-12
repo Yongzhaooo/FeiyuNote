@@ -42,6 +42,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class NoteKey(val notebookId: Long, val lessonId: Long, val noteId: Long) : NavKey
 @Serializable data class ArchivedKey(val notebookId: Long, val lessonId: Long) : NavKey
 @Serializable data class ReviewListKey(val notebookId: Long) : NavKey
+@Serializable data class CourseHandbookKey(val notebookId: Long, val sectionId: Long? = null) : NavKey
 @Serializable data object SettingsKey : NavKey
 @Serializable data object KeySettingsKey : NavKey
 @Serializable data object TemplatesKey : NavKey
@@ -90,6 +91,7 @@ fun AppNavigation(initial: List<NavKey>) {
                     selectedLessonId = selected,
                     onOpen = { backStack.openDetail(LessonKey(key.notebookId, it.id)) },
                     onOpenReview = { backStack.openDetail(ReviewListKey(key.notebookId)) },
+                    onOpenHandbook = { backStack.openDetail(CourseHandbookKey(key.notebookId)) },
                     // The list pane's back goes up a level, closing any open detail with it.
                     onBack = { while (backStack.size > 1) backStack.removeAt(backStack.lastIndex) },
                 )
@@ -110,6 +112,12 @@ fun AppNavigation(initial: List<NavKey>) {
                         }
                     },
                 )
+            }
+            entry<CourseHandbookKey>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
+                val vm: com.feiyu.notes.study.CourseHandbookViewModel = viewModel(factory = viewModelFactory {
+                    initializer { com.feiyu.notes.study.CourseHandbookViewModel(app, key.notebookId, createSavedStateHandle()) }
+                })
+                CourseHandbookScreen(vm, key.sectionId, back)
             }
             entry<LessonKey>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
                 val vm = studyViewModel(key.notebookId, key.lessonId)

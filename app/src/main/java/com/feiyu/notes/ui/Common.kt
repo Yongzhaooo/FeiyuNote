@@ -34,6 +34,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/** Translate the untouched preinstalled name without rewriting saved or user-edited templates. */
+internal fun com.feiyu.notes.data.Template.displayName(context: android.content.Context): String =
+    if (source == com.feiyu.notes.data.Template.BUILTIN_GUIDED && name in setOf("引导式讲解", "Guided explanation"))
+        context.getString(R.string.guided_template_name) else name
+
+internal fun com.feiyu.notes.data.Template.displayInstruction(context: android.content.Context): String =
+    com.feiyu.notes.study.StudyPrompts.localizedTemplate(instruction,
+        source == com.feiyu.notes.data.Template.BUILTIN_GUIDED, com.feiyu.notes.settings.AppLanguage.current(context))
+
 /** Loads a value from the store and reloads it after every successful write. */
 @Composable
 fun <T> rememberStoreValue(store: NotebookStore, vararg keys: Any?, load: suspend NotebookStore.() -> T): State<T?> {

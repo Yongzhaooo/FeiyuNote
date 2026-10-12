@@ -23,14 +23,15 @@ API Key 使用 AES-256-GCM 加密存入私有目录，加密密钥由 Android Ke
 ## 界面预览
 
 <p>
-<img src="docs/screenshots/0.4/home.png" width="180" alt="首页">
-<img src="docs/screenshots/0.4/study-chat.png" width="180" alt="课程问答与公式">
-<img src="docs/screenshots/0.4/yuyu-chat.png" width="180" alt="和鱼鱼聊天">
-<img src="docs/screenshots/0.4/settings.png" width="180" alt="设置">
-<img src="docs/screenshots/0.4/home-dark.png" width="180" alt="深色首页">
+<img src="docs/screenshots/0.5/zh/home.png" width="180" alt="中文首页">
+<img src="docs/screenshots/0.5/zh/handbook.png" width="180" alt="课程手册与公式">
+<img src="docs/screenshots/0.5/zh/class-notes.png" width="180" alt="随堂记录与相关章节">
+<img src="docs/screenshots/0.5/zh/title.png" width="180" alt="显式提炼课次主题">
+<img src="docs/screenshots/0.5/zh/study-chat.png" width="180" alt="课程问答与公式">
+<img src="docs/screenshots/0.5/zh/reference.png" width="180" alt="参考笔记空态引导">
 </p>
 
-截图中的课程与回答为演示内容，由测试中的模拟回答生成。
+截图来自实际应用界面；课程、手册、随堂记录和回答均为测试演示内容，回答由模拟模型生成。[查看英文截图](README.en.md#screenshots)。
 
 ## 界面与特性
 
@@ -38,9 +39,14 @@ API Key 使用 AES-256-GCM 加密存入私有目录，加密密钥由 Android Ke
 - 适配手机单栏与大屏双栏，支持浅色与深色主题。
 - 每个课次随机分配一张鲸鱼娘头像并保持稳定，支持在设置中更换自定义头像。
 - 笔记支持离线阅读、编辑/预览、HTML 导出与系统分享。
+- 课程手册：每门课程可导入或编写一份 UTF-8 Markdown（最多 1 MiB、1000 个标题），支持目录、书签和离线阅读。标题、列表、强调和公式原生显示，代码与表格保留可读源码。发送问题时本地检索本课程的相关完整章节，可在手册页暂停参考。
+- 随堂记录：在课次内边听边记，自动保存；发送问题时可选择附带，整理本课也会使用记录。失败重试使用发送时保存的快照；手册修改或删除后，旧引用需要明确移除再重试，或重新提问。
+- 点击课次标题可手工改名，或点「提炼主题」生成候选并确认，保留日期。参考笔记列表为空时提示先使用「整理本课」。
 - 0.2 原生离线 LaTeX 公式：行内支持 `$...$` 与 `\(...\)`，独立公式支持 `$$...$$` 与 `\[...\]`。支持常用分式、根号、积分和矩阵；宽公式横向滚动。复制保留公式源码，HTML 导出内嵌公式图片。不支持的语法显示原文，不支持完整 TeX 文档或自定义宏。
 
 ## 版本更新
+
+- **[0.5.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.5.0)**：新增课程手册、目录与书签，以及仅在本课程内进行的本地全文检索；新增自动保存的随堂记录，可随问题附带并参与整理；课次支持手工改名和显式提炼主题；参考笔记空列表增加整理入口提示。补齐内置 prompt、预装模板名称与说明的中英文自动切换，保留用户修改的内容。升级保留课程、问答、照片、复习记录和设置。
 
 - **[0.4.0](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.4.0)**：界面换成鲸鱼娘配色，卡片圆润，浅色和深色都重新调过；空列表配贴纸，生成回答时显示跳动的小点，新建课次改为右下角按钮。DeepSeek 密钥单独成页，只有这一页禁止截屏；设置首页顶部显示密钥状态和交流群（QQ 群 1079399140，可一键复制）。可以单独关掉聊天或学习：只留聊天时首页只剩公共聊天。公共聊天的助手换成软萌体贴的“鱼鱼”，称呼你为“用户酱”。内置提示词和未修改的“引导式讲解”模板随应用语言使用中文或英文。独立下载页同步换新，并展示交流群。
 - **[0.3.3](https://github.com/Yongzhaooo/FeiyuNote/releases/tag/v0.3.3)**：课程新增复习记录。可从已完成的问答或笔记「加入复习」，也可手工新增；支持编辑、删除、按状态筛选，标记「待复习」「已理解」「仍有疑问」，并回到来源。来源删除后保留复习文字并标明来源已删除。记录按课程隔离，全部操作在本地完成，不额外调用模型。

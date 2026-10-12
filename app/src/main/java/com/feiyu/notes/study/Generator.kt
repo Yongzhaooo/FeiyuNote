@@ -31,9 +31,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 
+enum class GenerationOperation { TURN, SUMMARY, TITLE }
+
+data class TitleSuggestion(val lessonId: Long, val title: String)
+
 /** What is running now, plus the last user-visible outcome message. */
-data class GenerationStatus(val running: Running? = null, val message: String? = null) {
-    data class Running(val notebookId: Long, val lessonId: Long, val replyId: Long?, val isSummary: Boolean)
+data class GenerationStatus(
+    val running: Running? = null,
+    val message: String? = null,
+    val titleSuggestion: TitleSuggestion? = null,
+) {
+    data class Running(
+        val notebookId: Long,
+        val lessonId: Long,
+        val replyId: Long?,
+        val operation: GenerationOperation = GenerationOperation.TURN,
+    ) {
+        val isSummary: Boolean get() = operation == GenerationOperation.SUMMARY
+    }
 }
 
 sealed interface StartResult {
@@ -89,9 +104,12 @@ class Generator(
     suspend fun summarize(notebookId: Long, lessonId: Long, templateId: Long?): StartResult = exclusive {
         ready.join()
         val template = templateId?.let { store.getTemplate(it) ?: return@exclusive StartResult.Invalid(TEMPLATE_GONE) }
-        val (input, sources) = ContextBuilder.buildSummary(store.readEntries(lessonId), template?.localized(), language, prompt(PromptKind.SUMMARY, language))
+        val lesson = store.getLesson(lessonId)?.takeIf { it.notebookId == notebookId } ?: return@exclusive StartResult.Invalid(context.getString(R.string.lesson_deleted))
+        val summary = try { ContextBuilder.buildSummary(store.readEntries(lessonId), template?.localized(), language, prompt(PromptKind.SUMMARY, language), lesson.scratchpad) }
+            catch (e: IllegalArgumentException) { return@exclusive StartResult.Invalid(context.getString(R.string.context_too_large)) }
+        val (input, sources) = summary
             ?: return@exclusive StartResult.Invalid(context.getString(R.string.summary_empty))
-        val running = GenerationStatus.Running(notebookId, lessonId, null, isSummary = true)
+        val running = GenerationStatus.Running(notebookId, lessonId, null, operation = GenerationOperation.SUMMARY)
         _status.value = GenerationStatus(running)
         // UNDISPATCHED: the body (and its finally) always runs, even if cancelled right away.
         job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -114,6 +132,78 @@ class Generator(
         StartResult.Started
     }
 
+    @Volatile private var activeTitleLessonId: Long? = null
+
+    suspend fun suggestTitle(notebookId: Long, lessonId: Long): StartResult = exclusive {
+        ready.join()
+        if (notebookId == com.feiyu.notes.data.NotebookStore.GENERAL_ID || lessonId == com.feiyu.notes.data.NotebookStore.GENERAL_ID) {
+            return@exclusive StartResult.Invalid(context.getString(R.string.lesson_deleted))
+        }
+        val lesson = store.getLesson(lessonId) ?: return@exclusive StartResult.Invalid(context.getString(R.string.lesson_deleted))
+        if (lesson.notebookId != notebookId) return@exclusive StartResult.Invalid(context.getString(R.string.lesson_deleted))
+        val entries = store.readEntries(lessonId, includeArchived = false)
+        val excerpt = TitleSuggester.extractExcerpt(entries)
+            ?: return@exclusive StartResult.Invalid(context.getString(R.string.title_extract_empty))
+        val datePrefix = TitleSuggester.resolveDatePrefix(lesson.title, lesson.createdAt)
+        val input = TitleSuggester.buildPrompt(excerpt, language)
+        activeTitleLessonId = lessonId
+        val running = GenerationStatus.Running(notebookId, lessonId, null, operation = GenerationOperation.TITLE)
+        _status.value = GenerationStatus(running)
+        job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            var message: String? = null
+            var suggestion: TitleSuggestion? = null
+            val started = System.nanoTime()
+            try {
+                val reply = generate(requireConfig(lessonId), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
+                val topic = TitleSuggester.validateTopic(reply.text, language)
+                if (topic != null) {
+                    val candidate = TitleSuggester.formatTitle(datePrefix, topic)
+                    val currentLesson = store.getLesson(lessonId)
+                    if (activeTitleLessonId == lessonId && currentLesson != null && currentLesson.notebookId == notebookId) {
+                        suggestion = TitleSuggestion(lessonId, candidate)
+                    } else {
+                        message = DISCARDED
+                    }
+                    diagnostics?.record(DiagnosticOperation.TITLE, DiagnosticResult.OK, durationMs = elapsed(started))
+                } else {
+                    diagnostics?.record(DiagnosticOperation.TITLE, DiagnosticResult.FAILED, durationMs = elapsed(started))
+                    message = context.getString(R.string.title_extract_invalid)
+                }
+            } catch (e: CancellationException) {
+                diagnostics?.record(DiagnosticOperation.TITLE, DiagnosticResult.CANCELLED, durationMs = elapsed(started))
+                throw e
+            } catch (e: Exception) {
+                diagnostics?.recordFailure(DiagnosticOperation.TITLE, e, elapsed(started))
+                message = describe(e)
+            } finally {
+                busy.set(false)
+                if (activeTitleLessonId != lessonId) {
+                    suggestion = null
+                }
+                _status.update { if (it.running === running) GenerationStatus(message = message, titleSuggestion = suggestion) else it }
+            }
+        }
+        StartResult.Started
+    }
+
+    fun cancelTitle(lessonId: Long) {
+        if (activeTitleLessonId == lessonId) {
+            activeTitleLessonId = null
+        }
+        val running = _status.value.running
+        if (running?.operation == GenerationOperation.TITLE && running.lessonId == lessonId) {
+            cancel()
+        }
+        _status.update {
+            if (it.titleSuggestion?.lessonId == lessonId) it.copy(titleSuggestion = null) else it
+        }
+    }
+
+    fun clearTitleSuggestion() {
+        activeTitleLessonId = null
+        _status.update { it.copy(titleSuggestion = null) }
+    }
+
     fun cancel() {
         job?.cancel()
     }
@@ -121,17 +211,23 @@ class Generator(
     /** Called by every delete before touching storage (spec §4). */
     fun cancelIfAffected(notebookId: Long? = null, lessonId: Long? = null, entryIds: Set<Long> = emptySet()) {
         val running = _status.value.running ?: return
-        if (running.notebookId == notebookId || running.lessonId == lessonId || running.replyId in entryIds) cancel()
+        if (running.notebookId == notebookId || running.lessonId == lessonId || running.replyId in entryIds) {
+            if (running.operation == GenerationOperation.TITLE) {
+                activeTitleLessonId = null
+            }
+            cancel()
+        }
     }
 
     private fun launchTurn(notebookId: Long, user: Entry, reply: Entry): StartResult {
-        val running = GenerationStatus.Running(notebookId, user.lessonId, reply.id, isSummary = false)
+        val running = GenerationStatus.Running(notebookId, user.lessonId, reply.id, operation = GenerationOperation.TURN)
         _status.value = GenerationStatus(running)
         // UNDISPATCHED: the body (and its finally) always runs, even if cancelled right away.
         job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             var message: String? = CANCELLED
             val started = System.nanoTime()
             try {
+                if (!store.isRequestContextCurrent(notebookId, user.requestContext)) throw KnowledgeChanged()
                 val entries = store.readEntries(user.lessonId, includeArchived = true)
                 val reference = user.sourceEntryIds.firstOrNull()?.let { store.getEntry(it) }
                 val template = user.templateId?.let { store.getTemplate(it) }
@@ -139,7 +235,14 @@ class Generator(
                 val input = ContextBuilder.buildTurn(user, entries, reference, template?.localized(), resolvePhoto = { photos.resolvePhoto(notebookId, it) }, language = language, base = base)
                 val answer = generate(requireConfig(user.lessonId), input.copy(systemText = input.systemText + "\n" + context.getString(R.string.response_language)))
                 diagnostics?.record(DiagnosticOperation.GENERATE, DiagnosticResult.OK, durationMs = elapsed(started))
-                message = if (store.commitReply(reply.id, answer.text, EntryState.COMPLETE)) null else DISCARDED
+                if (!store.isRequestContextCurrent(notebookId, user.requestContext)) {
+                    store.commitReply(reply.id, context.getString(R.string.knowledge_changed), EntryState.FAILED)
+                    message = context.getString(R.string.knowledge_changed)
+                } else if (store.commitReply(reply.id, answer.text, EntryState.COMPLETE)) message = null
+                else {
+                    store.commitReply(reply.id, context.getString(R.string.knowledge_changed), EntryState.FAILED)
+                    message = DISCARDED
+                }
             } catch (e: CancellationException) {
                 diagnostics?.record(DiagnosticOperation.GENERATE, DiagnosticResult.CANCELLED, durationMs = elapsed(started))
                 withContext(NonCancellable) { store.commitReply(reply.id, context.getString(R.string.cancelled), EntryState.CANCELLED) }
@@ -158,6 +261,15 @@ class Generator(
 
     /** Re-validates every reference right before sending (spec §5 失效引用). */
     private suspend fun validate(notebookId: Long, question: Entry): String? {
+        store.getLesson(question.lessonId)?.takeIf { it.notebookId == notebookId } ?: return context.getString(R.string.lesson_deleted)
+        if (!store.isRequestContextCurrent(notebookId, question.requestContext)) return context.getString(R.string.knowledge_changed)
+        if (question.requestContext.scratchpad.orEmpty().length + question.requestContext.knowledge.sumOf { it.markdown.length + it.headingPath.length } > 12_000) return context.getString(R.string.context_too_large)
+        try {
+            val template = question.templateId?.let { store.getTemplate(it) }
+            val reference = question.sourceEntryIds.firstOrNull()?.let { store.getEntry(it) }
+            val base = prompt(if (notebookId == NotebookStore.GENERAL_ID) PromptKind.GENERAL else PromptKind.STUDY, language)
+            ContextBuilder.buildTurn(question, emptyList(), reference, template?.localized(), { photos.resolvePhoto(notebookId, it) }, language, base)
+        } catch (e: IllegalArgumentException) { return context.getString(R.string.context_too_large) }
         val referenceId = question.sourceEntryIds.firstOrNull()
         if (referenceId != null && store.readReferenceNotes(notebookId).none { it.id == referenceId }) {
             return context.getString(R.string.reference_gone)
@@ -206,6 +318,8 @@ class Generator(
     private fun elapsed(started: Long) = (System.nanoTime() - started) / 1_000_000
 
     private fun describe(e: Exception): String = when (e) {
+        is KnowledgeChanged -> context.getString(R.string.knowledge_changed)
+        is IllegalArgumentException -> context.getString(R.string.context_too_large)
         is AiError.MissingKey -> context.getString(R.string.error_key)
         is AiError.Auth -> context.getString(R.string.error_auth, e.code)
         is AiError.Quota -> context.getString(R.string.error_quota, e.code)
@@ -221,4 +335,5 @@ class Generator(
     private val DISCARDED get() = context.getString(R.string.discarded)
     private val CANCELLED get() = context.getString(R.string.cancelled)
     private val TEMPLATE_GONE get() = context.getString(R.string.template_gone)
+    private class KnowledgeChanged : IllegalStateException()
 }

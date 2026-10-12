@@ -107,6 +107,124 @@ class NotebookStore(
         update("lessons", id, ContentValues().apply { put("title", title) }) == 1
     }
 
+    suspend fun updateScratchpad(notebookId: Long, lessonId: Long, text: String): Boolean = write {
+        db.update("lessons", ContentValues().apply { put("scratchpad", text) }, "id = ? AND notebook_id = ?", args(lessonId, notebookId)) == 1
+    }
+
+    suspend fun getCourseDocument(notebookId: Long): CourseDocument? = read {
+        query("SELECT * FROM course_documents WHERE notebook_id = ?", notebookId) { it.toCourseDocument() }.firstOrNull()
+    }
+
+    suspend fun readCourseSections(notebookId: Long): List<CourseSection> = read {
+        query("SELECT * FROM course_sections WHERE notebook_id = ? ORDER BY ordinal", notebookId) { it.toCourseSection() }
+    }
+
+    /** Source and index replacement are atomic. A stale editor cannot overwrite a newer revision. */
+    suspend fun saveCourseDocument(notebookId: Long, markdown: String, expectedRevision: Long?): Boolean {
+        val sections = withContext(io) { CourseMarkdown.sections(markdown) }
+        return write {
+            if (!isCourseNotebook(notebookId)) return@write false
+            val current = query("SELECT * FROM course_documents WHERE notebook_id = ?", notebookId) { it.toCourseDocument() }.firstOrNull()
+            if (current?.revision != expectedRevision) return@write false
+            val values = ContentValues().apply { put("notebook_id", notebookId); put("markdown", markdown); put("revision", (current?.revision ?: 0) + 1) }
+            val documentId = current?.id ?: insert("course_documents", values)
+            if (current != null) update("course_documents", documentId, values)
+            val old = query("SELECT * FROM course_sections WHERE notebook_id = ?", notebookId) { it.toCourseSection() }
+            val used = mutableSetOf<Long>()
+            sections.forEachIndexed { ordinal, section ->
+                // Preserve identity only for an unambiguous heading, or an exact unique body.
+                val sameHeading = old.filter { it.headingPath == section.headingPath && it.id !in used }
+                val match = if (sameHeading.size == 1 && sections.count { it.headingPath == section.headingPath } == 1) sameHeading.single()
+                    else old.filter { it.markdown == section.markdown && it.id !in used }.singleOrNull()
+                val sectionValues = ContentValues().apply {
+                    put("document_id", documentId); put("notebook_id", notebookId); put("heading_path", section.headingPath)
+                    put("markdown", section.markdown); put("ordinal", ordinal)
+                }
+                val sectionId = match?.id ?: insert("course_sections", sectionValues)
+                if (match != null) update("course_sections", sectionId, sectionValues)
+                db.update("course_bookmarks", ContentValues().apply { put("heading_path", section.headingPath) }, "section_id = ? AND notebook_id = ?", args(sectionId, notebookId))
+                used += sectionId
+                db.delete("course_sections_fts", "docid = ?", args(sectionId))
+                insert("course_sections_fts", ContentValues().apply { put("docid", sectionId); put("tokens", CourseMarkdown.terms(section.headingPath + "\n" + section.markdown).joinToString(" ")) })
+            }
+            old.filter { it.id !in used }.forEach { db.delete("course_sections", "id = ? AND notebook_id = ?", args(it.id, notebookId)) }
+            true
+        }
+    }
+
+    suspend fun deleteCourseDocument(notebookId: Long): Boolean = write {
+        db.delete("course_documents", "notebook_id = ?", args(notebookId)) == 1
+    }
+
+    suspend fun setCourseKnowledgeEnabled(notebookId: Long, enabled: Boolean): Boolean = write {
+        db.update("course_documents", ContentValues().apply { put("enabled", if (enabled) 1 else 0) }, "notebook_id = ?", args(notebookId)) == 1
+    }
+
+    suspend fun readCourseBookmarks(notebookId: Long): List<CourseBookmark> = read {
+        query("SELECT * FROM course_bookmarks WHERE notebook_id = ? ORDER BY id", notebookId) {
+            CourseBookmark(it.long("id")!!, it.long("section_id"), it.str("heading_path")!!)
+        }
+    }
+
+    suspend fun addCourseBookmark(notebookId: Long, sectionId: Long): Boolean = write {
+        val section = query("SELECT * FROM course_sections WHERE id = ? AND notebook_id = ?", sectionId, notebookId) { it.toCourseSection() }.firstOrNull() ?: return@write false
+        if (count("SELECT COUNT(*) FROM course_bookmarks WHERE notebook_id = ? AND section_id = ?", notebookId, sectionId) > 0) return@write true
+        insert("course_bookmarks", ContentValues().apply { put("notebook_id", notebookId); put("section_id", sectionId); put("heading_path", section.headingPath) })
+        true
+    }
+
+    suspend fun deleteCourseBookmark(notebookId: Long, bookmarkId: Long): Boolean = write {
+        db.delete("course_bookmarks", "id = ? AND notebook_id = ?", args(bookmarkId, notebookId)) == 1
+    }
+
+    suspend fun searchCourseKnowledge(notebookId: Long, question: String): List<com.feiyu.notes.study.KnowledgeContext> = read {
+        if (!isCourseNotebook(notebookId)) return@read emptyList()
+        val terms = CourseMarkdown.terms(question).take(128).toSet()
+        if (terms.isEmpty()) return@read emptyList()
+        data class Candidate(val id: Long, val heading: String, val ordinal: Int, val chars: Int, val score: Int)
+        val candidates = query("""SELECT s.id, s.heading_path, s.ordinal, length(s.markdown) AS chars, f.tokens AS search_tokens FROM course_sections_fts f JOIN course_sections s ON s.id = f.docid
+            JOIN course_documents d ON d.id = s.document_id AND d.notebook_id = s.notebook_id
+            WHERE course_sections_fts MATCH ? AND s.notebook_id = ? AND d.enabled = 1""",
+            terms.joinToString(" OR ") { "\"$it\"" }, notebookId) {
+                val heading = it.str("heading_path")!!
+                val score = terms.intersect(CourseMarkdown.terms(heading)).size * 4 + it.str("search_tokens")!!.split(' ').count { token -> token in terms }
+                Candidate(it.long("id")!!, heading, it.long("ordinal")!!.toInt(), it.long("chars")!!.toInt(), score)
+            }
+        val ranked = candidates.sortedWith(compareByDescending<Candidate> { it.score }.thenBy { it.chars }.thenBy { it.ordinal })
+        val chosen = mutableListOf<CourseSection>()
+        var length = 0
+        for (candidate in ranked) {
+            if (length + candidate.chars + candidate.heading.length > 12_000) continue
+            val section = query("SELECT * FROM course_sections WHERE id = ? AND notebook_id = ?", candidate.id, notebookId) { it.toCourseSection() }.single()
+            if (chosen.any { it.markdown.contains(section.markdown) || section.markdown.contains(it.markdown) ||
+                    it.headingPath.startsWith(section.headingPath + " / ") || section.headingPath.startsWith(it.headingPath + " / ") }) continue
+            if (length + section.markdown.length + section.headingPath.length > 12_000) continue
+            chosen += section
+            length += section.markdown.length + section.headingPath.length
+            if (chosen.size == 2) break
+        }
+        val document = query("SELECT id, revision FROM course_documents WHERE notebook_id = ?", notebookId) { it.getLong(0) to it.getLong(1) }.firstOrNull() ?: return@read emptyList()
+        chosen.map { com.feiyu.notes.study.KnowledgeContext(notebookId, document.first, document.second, it.id, it.headingPath, it.markdown) }
+    }
+
+    suspend fun isRequestContextCurrent(notebookId: Long, context: com.feiyu.notes.study.TurnContext): Boolean = read {
+        validRequestContext(notebookId, context)
+    }
+
+    /** Explicit retry repair; removes obsolete knowledge while retaining the original scratchpad. */
+    suspend fun clearEntryKnowledge(notebookId: Long, userEntryId: Long): Boolean = write {
+        val entry = query("SELECT e.* FROM entries e JOIN lessons l ON l.id = e.lesson_id WHERE e.id = ? AND l.notebook_id = ? AND e.kind = 'user'", userEntryId, notebookId) { it.toEntry() }.firstOrNull() ?: return@write false
+        update("entries", entry.id, ContentValues().apply { put("request_context", entry.requestContext.copy(knowledge = emptyList()).toJson()) }) == 1
+    }
+
+    private fun SQLiteDatabase.validRequestContext(notebookId: Long, context: com.feiyu.notes.study.TurnContext): Boolean =
+        context.version == 1 && context.knowledge.size <= 2 && context.knowledge.all { source ->
+            source.notebookId == notebookId && isCourseNotebook(notebookId) && count("""SELECT COUNT(*) FROM course_sections s
+                JOIN course_documents d ON d.id = s.document_id AND d.notebook_id = s.notebook_id
+                WHERE s.id = ? AND s.notebook_id = ? AND d.id = ? AND d.revision = ? AND d.enabled = 1 AND s.heading_path = ? AND s.markdown = ?""",
+                source.sectionId, notebookId, source.documentId, source.documentRevision, source.headingPath, source.markdown) == 1L
+        }
+
     suspend fun deleteLesson(id: Long): Boolean {
         if (id == GENERAL_ID) return false
         val notebookId = getLesson(id)?.notebookId ?: return false
@@ -152,6 +270,8 @@ class NotebookStore(
     suspend fun insertQuestion(question: Entry): Pair<Entry, Entry>? = write {
         require(question.kind == EntryKind.USER && question.action != null)
         if (count("SELECT COUNT(*) FROM lessons WHERE id = ?", question.lessonId) == 0L) return@write null
+        val notebookId = query("SELECT notebook_id FROM lessons WHERE id = ?", question.lessonId) { it.getLong(0) }.single()
+        if (!validRequestContext(notebookId, question.requestContext)) return@write null
         if (question.parentEntryId != null &&
             count("SELECT COUNT(*) FROM entries WHERE id = ? AND lesson_id = ?", question.parentEntryId, question.lessonId) == 0L
         ) return@write null
@@ -191,6 +311,13 @@ class NotebookStore(
      */
     suspend fun commitReply(assistantId: Long, text: String, state: EntryState): Boolean = write {
         require(state != EntryState.PENDING)
+        if (state == EntryState.COMPLETE) {
+            val source = query("""SELECT q.*, l.notebook_id AS owner_notebook FROM entries a
+                JOIN entries q ON q.id = a.parent_entry_id JOIN lessons l ON l.id = q.lesson_id
+                WHERE a.id = ? AND a.kind = 'assistant' AND a.state = 'pending'""", assistantId) { it.toEntry() to it.long("owner_notebook")!! }.firstOrNull()
+                ?: return@write false
+            if (!validRequestContext(source.second, source.first.requestContext)) return@write false
+        }
         db.update(
             "entries",
             ContentValues().apply { put("text", text); put("state", state.db) },
@@ -548,6 +675,7 @@ class NotebookStore(
         put("archived", if (archived) 1 else 0)
         put("mastery", mastery?.db)
         put("created_at", createdAt)
+        put("request_context", requestContext.toJson())
     }
 
     private fun Cursor.str(col: String): String? = getColumnIndexOrThrow(col).let { if (isNull(it)) null else getString(it) }
@@ -563,7 +691,10 @@ class NotebookStore(
         createdAt = long("created_at")!!,
     )
 
-    private fun Cursor.toLesson() = Lesson(long("id")!!, long("notebook_id")!!, str("title")!!, long("created_at")!!)
+    private fun Cursor.toLesson() = Lesson(long("id")!!, long("notebook_id")!!, str("title")!!, long("created_at")!!, str("scratchpad")!!)
+
+    private fun Cursor.toCourseDocument() = CourseDocument(long("id")!!, long("notebook_id")!!, str("markdown")!!, long("revision")!!, long("enabled") == 1L)
+    private fun Cursor.toCourseSection() = CourseSection(long("id")!!, long("document_id")!!, long("notebook_id")!!, str("heading_path")!!, str("markdown")!!, long("ordinal")!!.toInt())
 
     private fun Cursor.toTemplate() = Template(long("id")!!, str("name")!!, str("instruction")!!, long("created_at")!!, str("source"))
 
@@ -582,6 +713,7 @@ class NotebookStore(
         archived = long("archived") == 1L,
         mastery = enumOf<Mastery>(str("mastery")),
         createdAt = long("created_at")!!,
+        requestContext = com.feiyu.notes.study.TurnContext.fromJson(str("request_context")),
     )
 
     private fun Cursor.toReviewRecord() = ReviewRecord(

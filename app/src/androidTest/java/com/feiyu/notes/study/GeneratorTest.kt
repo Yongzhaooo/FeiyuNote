@@ -235,4 +235,102 @@ class GeneratorTest {
         idle()
         assertTrue(inputs.last().systemText.contains("每步写依据").not())
     }
+
+    @Test fun contextSnapshotSurvivesRetryAndChangedKnowledgeRequiresExplicitRemoval() = runBlocking {
+        assertTrue(store.saveCourseDocument(notebook.id, "# 极限\n假设连续，定理条件。", null))
+        val knowledge = store.searchCourseKnowledge(notebook.id, "极限条件")
+        assertEquals(StartResult.Started, generator.ask(notebook.id, question("极限").copy(requestContext = TurnContext(scratchpad = "发送时记录", knowledge = knowledge))))
+        gate.completeExceptionally(AiError.Network(java.io.IOException("synthetic failure")))
+        idle()
+        val user = entries().single { it.kind == EntryKind.USER }
+        store.updateScratchpad(notebook.id, lesson.id, "编辑后的记录")
+        gate = CompletableDeferred<AiReply>().apply { complete(AiReply("retry")) }
+        assertEquals(StartResult.Started, generator.retry(notebook.id, user.id))
+        idle()
+        assertTrue(inputs.last().messages.last().text.contains("发送时记录"))
+        assertTrue(inputs.last().messages.none { it.text.contains("编辑后的记录") })
+        assertTrue(inputs.last().systemText.contains("假设连续"))
+        assertTrue(store.saveCourseDocument(notebook.id, "# 极限\n手册新版", 1))
+        val count = calls.get()
+        assertTrue(generator.retry(notebook.id, user.id) is StartResult.Invalid)
+        assertEquals(count, calls.get())
+        assertTrue(store.clearEntryKnowledge(notebook.id, user.id))
+        assertEquals(StartResult.Started, generator.retry(notebook.id, user.id))
+        idle()
+        assertTrue(inputs.last().systemText.contains("<课程知识>").not())
+        assertTrue(inputs.last().messages.last().text.contains("发送时记录"))
+    }
+
+    @Test fun summaryOfScratchpadOnlyCreatesNoteWithoutInventedEntrySources() = runBlocking {
+        store.updateScratchpad(notebook.id, lesson.id, "课堂重点")
+        assertEquals(StartResult.Started, generator.summarize(notebook.id, lesson.id, null))
+        gate.complete(AiReply("摘要")); idle()
+        val note = entries().single()
+        assertEquals(EntryKind.NOTE, note.kind)
+        assertTrue(note.sourceEntryIds.isEmpty())
+        assertTrue(inputs.single().messages.single().text.contains("课堂重点"))
+    }
+
+    @Test fun deletedHandbookDiscardsInFlightAnswerAndBlocksRetry() = runBlocking {
+        store.saveCourseDocument(notebook.id, "# 极限\n连续前提", null)
+        val source = store.searchCourseKnowledge(notebook.id, "极限")
+        assertEquals(StartResult.Started, generator.ask(notebook.id, question("极限").copy(requestContext = TurnContext(knowledge = source))))
+        withTimeout(5000) { while (calls.get() == 0) kotlinx.coroutines.delay(1) }
+        val user = entries().single { it.kind == EntryKind.USER }
+        store.deleteCourseDocument(notebook.id) // Deliberately bypass UI cancellation to test late commit.
+        gate.complete(AiReply("obsolete answer must not be committed")); idle()
+        val answer = entries().single { it.kind == EntryKind.ASSISTANT }
+        assertEquals(EntryState.FAILED, answer.state)
+        assertTrue(answer.text.contains("obsolete answer").not())
+        assertTrue(generator.retry(notebook.id, user.id) is StartResult.Invalid)
+        assertEquals(1, calls.get())
+    }
+
+    @Test fun cancelTitleDiscardsLateUncooperativeModelCandidate() = runBlocking {
+        val (q, reply) = store.insertQuestion(question("极限"))!!
+        store.commitReply(reply.id, "连续函数", EntryState.COMPLETE)
+        val entered = CompletableDeferred<Unit>()
+        val late = CompletableDeferred<AiReply>()
+        val uncooperative = Generator(context, store, photos, { AiConfig(apiKey = "test") }, scope, Job().apply { complete() },
+            generate = { _, _ -> kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { entered.complete(Unit); late.await() } })
+        assertEquals(StartResult.Started, uncooperative.suggestTitle(notebook.id, lesson.id))
+        entered.await()
+        uncooperative.cancelTitle(lesson.id)
+        late.complete(AiReply("极限与连续"))
+        withTimeout(5000) { uncooperative.status.first { it.running == null } }
+        assertNull(uncooperative.status.value.titleSuggestion)
+        assertEquals(2, entries().size)
+        assertEquals(q.id, entries().first().id)
+    }
+
+    @Test fun suggestTitleExtractsCandidateWithoutCreatingChatEntries() = runBlocking {
+        assertTrue(generator.suggestTitle(notebook.id, lesson.id) is StartResult.Invalid)
+
+        val otherNotebook = store.createNotebook(NotebookKind.COURSE, "Other")!!
+        assertTrue(generator.suggestTitle(otherNotebook.id, lesson.id) is StartResult.Invalid)
+        assertTrue(generator.suggestTitle(com.feiyu.notes.data.NotebookStore.GENERAL_ID, com.feiyu.notes.data.NotebookStore.GENERAL_ID) is StartResult.Invalid)
+
+        generator.ask(notebook.id, question("极限是什么"))
+        gate.complete(AiReply("极限是趋近的数值"))
+        idle()
+        val countBefore = entries().size
+
+        gate = CompletableDeferred()
+        assertEquals(StartResult.Started, generator.suggestTitle(notebook.id, lesson.id))
+        running()
+        gate.complete(AiReply("极限与连续"))
+        val status = idle()
+        org.junit.Assert.assertNotNull(status.titleSuggestion)
+        assertEquals(lesson.id, status.titleSuggestion?.lessonId)
+        assertTrue(status.titleSuggestion!!.title.endsWith("极限与连续"))
+        assertEquals(countBefore, entries().size)
+
+        // Cancelled suggestion does not set suggestion
+        gate = CompletableDeferred()
+        assertEquals(StartResult.Started, generator.suggestTitle(notebook.id, lesson.id))
+        running()
+        generator.cancel()
+        idle()
+        org.junit.Assert.assertNull(generator.status.value.titleSuggestion)
+    }
 }

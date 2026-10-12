@@ -72,13 +72,13 @@ fun TemplateScreen(store: NotebookStore, onBack: () -> Unit) {
                     ) {
                         IconBadge(if (t.isSkill) R.drawable.ic_sparkle else R.drawable.ic_pencil, Accent.of(t.id))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(t.name, style = MaterialTheme.typography.titleMedium)
+                            Text(t.displayName(context), style = MaterialTheme.typography.titleMedium)
                             val origin = when {
                                 t.source == Template.BUILTIN_GUIDED -> context.getString(R.string.template_builtin) + " · "
                                 t.isSkill -> context.getString(R.string.template_skill, t.source!!.removePrefix("https://raw.githubusercontent.com/")) + "\n"
                                 else -> ""
                             }
-                            Text(origin + t.instruction.take(60), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(origin + t.displayInstruction(context).take(60), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         TextButton(onClick = { deletingId = t.id }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                             Text(context.getString(R.string.delete))
@@ -91,14 +91,14 @@ fun TemplateScreen(store: NotebookStore, onBack: () -> Unit) {
 
     editingId?.let { id ->
         val existing = templates?.firstOrNull { it.id == id }
-        var instruction by rememberSaveable(id) { mutableStateOf(existing?.instruction.orEmpty()) }
+        var instruction by rememberSaveable(id) { mutableStateOf(existing?.displayInstruction(context).orEmpty()) }
         TextInputDialog(
             title = if (id == 0L) context.getString(R.string.new_template) else context.getString(R.string.edit_template),
-            initial = existing?.name.orEmpty(),
+            initial = existing?.displayName(context).orEmpty(),
             label = context.getString(R.string.name),
             onConfirm = { name ->
                 if (instruction.isNotBlank()) scope.launch {
-                    store.saveTemplate(Template(existing?.id ?: 0, name, instruction.trim(), existing?.createdAt ?: 0))
+                    store.saveTemplate(existing?.copy(name = name, instruction = instruction.trim()) ?: Template(0, name, instruction.trim(), 0))
                 }
             },
             onDismiss = { editingId = null },

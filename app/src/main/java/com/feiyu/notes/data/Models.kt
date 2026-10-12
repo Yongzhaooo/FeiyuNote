@@ -19,6 +19,7 @@ data class Lesson(
     val notebookId: Long,
     val title: String,
     val createdAt: Long,
+    val scratchpad: String = "",
 )
 
 enum class EntryKind { USER, ASSISTANT, NOTE }
@@ -51,6 +52,7 @@ data class Entry(
     val archived: Boolean = false,
     val mastery: Mastery? = null,
     val createdAt: Long = 0,
+    val requestContext: com.feiyu.notes.study.TurnContext = com.feiyu.notes.study.TurnContext.EMPTY,
 ) {
     val isRoot: Boolean get() = kind == EntryKind.USER && parentEntryId == null
 }
