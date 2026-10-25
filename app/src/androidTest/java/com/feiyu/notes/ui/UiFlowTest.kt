@@ -77,8 +77,11 @@ class UiFlowTest {
     private val configs: MutableList<AiConfig> = Collections.synchronizedList(mutableListOf())
     private var scenario: ActivityScenario<MainActivity>? = null
     private var mathReply: String? = null
+    /** Promo recording only: lets the typing dots show before a reply. */
+    private var replyDelayMs = 0L
 
     private val fakeModel: suspend (AiConfig, AiInput) -> AiReply = { config, input ->
+        if (replyDelayMs > 0) kotlinx.coroutines.delay(replyDelayMs)
         configs += config
         inputs += input
         val reply = mathReply?.let { AiReply(it) } ?: if (input.systemText.contains("复习笔记")) AiReply("笔记正文\n第二行") else AiReply("答案${inputs.size}")
@@ -529,6 +532,71 @@ class UiFlowTest {
         awaitAnswer("答案3")
         assertEquals("high", configs.last().effort)
         screenshot("general-chat-phone")
+    }
+
+    /** A paced walkthrough for the promo video, screen-recorded from the host; runs only with `-e promo true`. */
+    @Test fun promoWalkthrough() {
+        org.junit.Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("promo") == "true")
+        fun pause(ms: Long) { compose.waitForIdle(); Thread.sleep(ms) }
+        shell("wm size 1080x2300")
+        app.prefs.setTheme(com.feiyu.notes.settings.ThemeMode.LIGHT)
+        createNotebook("新建课程", "高等数学")
+        createNotebook("新建课程", "大学物理")
+        createNotebook("新建刷题本", "线代错题本")
+        android.util.Log.i("UiFlowTest", "PROMO home")
+        pause(3500)
+
+        replyDelayMs = 2600
+        click("高等数学")
+        pause(1200)
+        click("新课次")
+        pause(1000)
+        mathReply = "核心结论：当 \\(x\\to 0\\) 时，\\(\\sin x\\) 和 \\(x\\) 几乎一样大，所以比值趋于 1。\n" +
+            "第一步，在单位圆里比较面积，可以得到 \\(\\sin x < x < \\tan x\\)。\n" +
+            "第二步，同除以 \\(\\sin x\\) 并取倒数：\n\\[\\cos x < \\frac{\\sin x}{x} < 1\\]\n" +
+            "第三步，由夹逼定理得\n\\[\\lim_{x\\to 0}\\frac{\\sin x}{x}=1\\]"
+        typeDraft("为什么 sin x / x 在 x→0 时极限是 1？")
+        pause(1200)
+        compose.onNodeWithTag("send").performClick()
+        hideKeyboard()
+        waitSubstring("夹逼定理")
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("math-display", useUnmergedTree = true).fetchSemanticsNodes().size == 2 }
+        pause(4000)
+        systemBack()
+        pause(600)
+        systemBack()
+        pause(1200)
+
+        compose.onNodeWithTag("general-chat").performClick()
+        pause(1500)
+        mathReply = "用户酱辛苦啦，先抱抱～ (｡•ᴗ•｡)\n" +
+            "连着上了一整天课，累是很正常的，不是你不够努力哦。今晚不如先把最卡的那一个知识点记下来，剩下的明天再说。\n" +
+            "要不要跟鱼鱼说说，今天哪一节课最让你头大？"
+        typeDraft("今天好累，感觉什么都没学进去")
+        pause(1200)
+        compose.onNodeWithTag("send").performClick()
+        hideKeyboard()
+        waitSubstring("要不要跟鱼鱼说说")
+        pause(4000)
+        systemBack()
+        pause(1200)
+
+        click("设置")
+        pause(2500)
+        compose.onNodeWithTag("feature-study").performScrollTo().performClick()
+        pause(1500)
+        systemBack()
+        pause(3000)
+        click("设置")
+        pause(800)
+        compose.onNodeWithTag("feature-study").performScrollTo().performClick()
+        pause(1000)
+        systemBack()
+        pause(1500)
+
+        click("切换到深色模式")
+        pause(3500)
+        android.util.Log.i("UiFlowTest", "PROMO end")
     }
 
     /** README screenshots with tidy demo content; runs only with `-e showcase true`. */
