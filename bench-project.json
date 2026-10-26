@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "project": "feiyu-note",
+  "documents": [
+    {
+      "id": "sync-docs-wayfinder",
+      "path": "docs/wayfinder.md",
+      "category": "knowledge",
+      "role": "status",
+      "topics": [
+        "project-progress"
+      ]
+    },
+    {
+      "id": "sync-docs-spec",
+      "path": "docs/spec.md",
+      "category": "knowledge",
+      "role": "topic",
+      "topics": [
+        "project-progress"
+      ]
+    },
+    {
+      "id": "sync-docs-plan",
+      "path": "docs/plan.md",
+      "category": "knowledge",
+      "role": "topic",
+      "topics": [
+        "project-progress"
+      ]
+    },
+    {
+      "id": "sync-docs-memory-design",
+      "path": "docs/memory-design.md",
+      "category": "knowledge",
+      "role": "topic",
+      "topics": [
+        "project-progress"
+      ]
+    }
+  ],
+  "withdrawn_documents": []
+}
