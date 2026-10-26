@@ -186,7 +186,7 @@ class UiFlowTest {
         assertTrue("new notebooks default to the guided template", inputs.last().systemText.contains(com.feiyu.notes.study.StudyPrompts.GUIDED))
 
         clickNth("展开讲解", 0)
-        compose.onNodeWithTag("send").performClick()
+        clickTag("send")
         awaitAnswer("答案3")
 
         click("整理本课")
@@ -241,7 +241,7 @@ class UiFlowTest {
         }
         click("拍照")
         waitDescription("照片")
-        compose.onNodeWithTag("send").performClick()
+        clickTag("send")
         awaitAnswer("答案1")
         assertEquals(1, inputs.last().messages.last().images.size)
 
@@ -345,18 +345,18 @@ class UiFlowTest {
         assertSecure(false)
         // The group sits near the top of Settings and copies its number.
         compose.onNodeWithTag("settings-qq-group").assertIsDisplayed().assert(hasText("QQ 群：1079399140"))
-        compose.onNodeWithTag("settings-copy-group").performClick()
+        clickTag("settings-copy-group")
         waitText("已复制")
         shell("wm size 1080x2300")
         screenshot("settings-phone")
 
-        compose.onNodeWithTag("open-key-settings").performClick()
+        clickTag("open-key-settings")
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("api-key").fetchSemanticsNodes().isNotEmpty() }
         assertSecure(true)
         compose.onNodeWithTag("save-key").assertIsNotEnabled()
         compose.onNodeWithTag("api-key").performTextInput("sk-synthetic-ui-test")
         hideKeyboard()
-        compose.onNodeWithTag("save-key").performClick()
+        clickTag("save-key")
         waitText("密钥已保存")
         assertTrue(app.apiSettings.hasKey())
         // The typed key leaves the field once stored; the page never shows stored key text.
@@ -502,7 +502,7 @@ class UiFlowTest {
     @Test fun generalChatPairsNumbersJumpsWithoutRequestsAndUsesSessionEffort() {
         waitText("一起来聊天吧")
         screenshot("home-general-chat")
-        compose.onNodeWithTag("general-chat").performClick()
+        clickTag("general-chat")
         waitText("想聊什么都可以，直接在下方输入；也可以拍照或从相册选图来问。") // chat banner, not the study one
         waitText("dsf.low")
         waitText("整理对话")
@@ -527,7 +527,7 @@ class UiFlowTest {
 
         app.prefs.setSessionModel(com.feiyu.notes.data.NotebookStore.GENERAL_ID, com.feiyu.notes.ai.ModelChoice("deepseek-flash", "high"))
         waitText("dsf.high")
-        compose.onNodeWithTag("send").performClick()
+        clickTag("send")
         hideKeyboard()
         awaitAnswer("答案3")
         assertEquals("high", configs.last().effort)
@@ -557,7 +557,7 @@ class UiFlowTest {
             "第三步，由夹逼定理得\n\\[\\lim_{x\\to 0}\\frac{\\sin x}{x}=1\\]"
         typeDraft("为什么 sin x / x 在 x→0 时极限是 1？")
         pause(1200)
-        compose.onNodeWithTag("send").performClick()
+        clickTag("send")
         hideKeyboard()
         waitSubstring("夹逼定理")
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("math-display", useUnmergedTree = true).fetchSemanticsNodes().size == 2 }
@@ -567,14 +567,14 @@ class UiFlowTest {
         systemBack()
         pause(1200)
 
-        compose.onNodeWithTag("general-chat").performClick()
+        clickTag("general-chat")
         pause(1500)
         mathReply = "用户酱辛苦啦，先抱抱～ (｡•ᴗ•｡)\n" +
             "连着上了一整天课，累是很正常的，不是你不够努力哦。今晚不如先把最卡的那一个知识点记下来，剩下的明天再说。\n" +
             "要不要跟鱼鱼说说，今天哪一节课最让你头大？"
         typeDraft("今天好累，感觉什么都没学进去")
         pause(1200)
-        compose.onNodeWithTag("send").performClick()
+        clickTag("send")
         hideKeyboard()
         waitSubstring("要不要跟鱼鱼说说")
         pause(4000)
@@ -625,7 +625,7 @@ class UiFlowTest {
         systemBack()
 
         waitText("一起来聊天吧")
-        compose.onNodeWithTag("general-chat").performClick()
+        clickTag("general-chat")
         mathReply = "用户酱辛苦啦，先抱抱～ (｡•ᴗ•｡)\n" +
             "连着上了一整天课，累是很正常的，不是你不够努力哦。今晚不如先把最卡的那一个知识点记下来，剩下的明天再说。\n" +
             "要不要跟鱼鱼说说，今天哪一节课最让你头大？"
@@ -666,7 +666,7 @@ class UiFlowTest {
         screenshot("release05-$language-home")
         click(course)
         click(context.getString(com.feiyu.notes.R.string.course_handbook))
-        compose.onNodeWithTag("edit-document").performClick()
+        clickTag("edit-document")
         val handbook = if (chinese) {
             "# 极限与连续\n\n极限描述函数值趋近的结果。使用定理时保留全部前提。\n\n## 连续函数\n\n如果函数 f 在 a 处**连续**，可以直接代入。\n\n$$ \\lim_{x\\to a} f(x)=f(a) $$\n\n例如 f(x)=x²，a=2 时，极限为 4。\n\n## 常见易错点\n\n先检查公式的适用条件。分母为零时需要另作论证。"
         } else {
@@ -674,18 +674,18 @@ class UiFlowTest {
         }
         compose.onNodeWithTag("document-input").performTextInput(handbook)
         hideKeyboard()
-        compose.onNodeWithTag("save-document").performClick()
+        clickTag("save-document")
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("document-reader").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("math-display", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithText(context.getString(com.feiyu.notes.R.string.document_add_bookmark))[0].performClick()
         screenshot("release05-$language-handbook")
         systemBack()
         click(context.getString(com.feiyu.notes.R.string.new_session, context.getString(com.feiyu.notes.R.string.session)))
-        compose.onNodeWithTag("pick-reference").performClick()
+        clickTag("pick-reference")
         compose.onNodeWithTag("reference-empty-hint").assertExists()
         screenshot("release05-$language-reference")
         click(context.getString(com.feiyu.notes.R.string.cancel))
-        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        clickTag("toggle-scratchpad")
         val notes = if (chinese) "老师强调：先检查函数在该点连续。\n极限运算前列出适用条件。\n分母为零时不要直接代入。" else
             "Check continuity at the point first.\nState the conditions before taking limits.\nDo not substitute into a zero denominator."
         compose.onNodeWithTag("scratchpad-input").performTextInput(notes)
@@ -694,10 +694,10 @@ class UiFlowTest {
         hideKeyboard()
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("knowledge-preview").fetchSemanticsNodes().isNotEmpty() }
         screenshot("release05-$language-class-notes")
-        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        clickTag("toggle-scratchpad")
         mathReply = if (chinese) "函数 x² 在 x=2 处连续，所以可以直接代入。\n\\[\\lim_{x\\to 2}x^2=2^2=4\\]\n这里使用的是连续函数的极限定理。" else
             "The function x² is continuous at x=2, so substitution is valid.\n\\[\\lim_{x\\to 2}x^2=2^2=4\\]\nThis uses the limit rule for continuous functions."
-        compose.onNodeWithTag("send").performClick()
+        clickTag("send")
         hideKeyboard()
         waitSubstring(if (chinese) "这里使用" else "This uses")
         compose.waitUntil(15_000) { app.generator.status.value.running == null }
@@ -705,11 +705,11 @@ class UiFlowTest {
         assertTrue(inputs.single().systemText.contains(if (chinese) "<课程知识>" else "<course-knowledge>"))
         val topic = if (chinese) "极限与连续" else "Limits and Continuity"
         mathReply = topic
-        compose.onNodeWithTag("lesson-title").performClick()
-        compose.onNodeWithTag("suggest-title").performClick()
+        clickTag("lesson-title")
+        clickTag("suggest-title")
         waitSubstring(topic)
         screenshot("release05-$language-title")
-        compose.onNodeWithTag("rename-confirm").performClick()
+        clickTag("rename-confirm")
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("rename-confirm").fetchSemanticsNodes().isEmpty() }
         screenshot("release05-$language-study-chat")
         assertEquals(2, inputs.size)
@@ -744,7 +744,7 @@ class UiFlowTest {
         compose.onNodeWithTag("prompt-GENERAL").performScrollTo().performClick()
         compose.onNodeWithTag("prompt-editor").performTextClearance()
         compose.onNodeWithTag("prompt-editor").performTextInput("自定义公共提示")
-        compose.onNodeWithTag("prompt-save").performClick()
+        clickTag("prompt-save")
         waitText("已修改")
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("prompt-editor").fetchSemanticsNodes().isEmpty() }
         // The toolbar back button, not system BACK: a closing dialog window can still swallow the key event.
@@ -753,7 +753,7 @@ class UiFlowTest {
 
         // "公共聊天" is also a prompt row in Settings; open the home card by tag once home is back.
         waitText("一起来聊天吧")
-        compose.onNodeWithTag("general-chat").performClick()
+        clickTag("general-chat")
         waitText("想聊什么都可以，直接在下方输入；也可以拍照或从相册选图来问。")
         ask("你好")
         awaitAnswer("答案1")
@@ -780,7 +780,7 @@ class UiFlowTest {
         hideKeyboard()
         compose.onNodeWithTag("preview-feedback").performScrollTo().performClick()
         waitText("不附带诊断信息")
-        compose.onNodeWithTag("submit-feedback").performClick()
+        clickTag("submit-feedback")
         waitText("发送结果未确认，服务器可能已经收到。草稿已保留，重新提交不会重复建单。")
 
         // The frozen submission survives activity recreation; retrying resends it unchanged.
@@ -788,7 +788,7 @@ class UiFlowTest {
         waitText("重新提交")
         compose.onNodeWithTag("feedback-description").assert(hasText("合成问题描述"))
         compose.onNodeWithTag("preview-feedback").performScrollTo().performClick()
-        compose.onNodeWithTag("submit-feedback").performClick()
+        clickTag("submit-feedback")
         waitText("已收到，反馈编号：$reportId")
         assertEquals(2, bodies.size)
         assertEquals(bodies[0], bodies[1])
@@ -804,7 +804,7 @@ class UiFlowTest {
         scenario!!.close()
         launch()
         waitText("上次运行遇到问题")
-        compose.onNodeWithTag("crash-review").performClick()
+        clickTag("crash-review")
         waitText("关于与帮助")
         compose.onNodeWithTag("attach-diagnostics").assertIsOn()
         compose.onNodeWithTag("feedback-description").performScrollTo().performTextInput("崩溃了")
@@ -816,7 +816,7 @@ class UiFlowTest {
         compose.onNodeWithTag("share-feedback").performScrollTo().performClick()
         waitText("已交给其他应用，是否发出请在该应用中确认。")
         intended(hasAction(Intent.ACTION_CHOOSER))
-        compose.onNodeWithTag("submit-feedback").performClick()
+        clickTag("submit-feedback")
         waitSubstring("已收到，反馈编号：")
         assertTrue(bodies.single().contains("java.lang.IllegalStateException"))
         assertTrue(!bodies.single().contains("sk-test"))
@@ -856,8 +856,8 @@ class UiFlowTest {
         waitText("待复习")
 
         // Change review status on card from Pending to Understood
-        compose.onNodeWithTag("record-status-chip").performClick()
-        compose.onNodeWithTag("status-menu-item-understood").performClick()
+        clickTag("record-status-chip")
+        clickTag("status-menu-item-understood")
         waitText("已理解")
         screenshot("course-review-list")
 
@@ -865,7 +865,7 @@ class UiFlowTest {
         assertEquals(initialRequests, inputs.size)
 
         // Jump back to source chat entry
-        compose.onNodeWithTag("jump-to-source").performClick()
+        clickTag("jump-to-source")
         waitText("什么是泰勒展开？")
         waitText("答案1")
 
@@ -902,9 +902,9 @@ class UiFlowTest {
 
         // Click "加入复习" in NoteScreen
         screenshot("course-review-note-add")
-        compose.onNodeWithTag("note-add-to-review").performClick()
+        clickTag("note-add-to-review")
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("review-dialog-save").performClick()
+        clickTag("review-dialog-save")
         waitText("已加入复习")
 
         // Back to lesson screen, then back to lesson list
@@ -918,7 +918,7 @@ class UiFlowTest {
         waitText("笔记正文")
 
         // Jump back to source note
-        compose.onNodeWithTag("jump-to-source").performClick()
+        clickTag("jump-to-source")
         waitText("导出 HTML")
         waitSubstring("笔记正文")
 
@@ -942,7 +942,7 @@ class UiFlowTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-topic-input").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("review-topic-input").performTextClearance()
         compose.onNodeWithTag("review-topic-input").performTextInput("微积分基础概念")
-        compose.onNodeWithTag("review-dialog-save").performClick()
+        clickTag("review-dialog-save")
         waitText("已加入复习")
 
         // Archive "什么是微积分？"
@@ -960,7 +960,7 @@ class UiFlowTest {
         waitText("微积分基础概念")
 
         // Jump to archived source
-        compose.onNodeWithTag("jump-to-source").performClick()
+        clickTag("jump-to-source")
         waitSubstring("已归档")
         waitText("什么是微积分？")
 
@@ -974,7 +974,7 @@ class UiFlowTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("review-notes-input").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("review-notes-input").performTextClearance()
         compose.onNodeWithTag("review-notes-input").performTextInput("已补充微分与积分定义")
-        compose.onNodeWithTag("review-dialog-save").performClick()
+        clickTag("review-dialog-save")
         waitText("已补充微分与积分定义")
 
         // Filter empty state check
@@ -984,7 +984,7 @@ class UiFlowTest {
         waitText("微积分基础概念")
 
         // Now delete the source entry in ArchivedScreen
-        compose.onNodeWithTag("jump-to-source").performClick()
+        clickTag("jump-to-source")
         waitSubstring("已归档")
         compose.onAllNodesWithTag("thread-menu")[0].performClick()
         click("删除整条问答")
@@ -1034,7 +1034,7 @@ class UiFlowTest {
 
         // 4. Fill valid topic and save
         compose.onNodeWithTag("review-topic-input").performTextInput("可恢复的主题")
-        compose.onNodeWithTag("review-dialog-save").performClick()
+        clickTag("review-dialog-save")
         waitText("可恢复的主题")
 
         // 5. Test editing dialog draft retention across recreation
@@ -1046,7 +1046,7 @@ class UiFlowTest {
         compose.onNodeWithTag("review-notes-input").assert(hasText("未保存的编辑草稿"))
 
         // 6. Dismiss/cancel cleanly
-        compose.onNodeWithTag("review-dialog-cancel").performClick()
+        clickTag("review-dialog-cancel")
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("review-dialog-cancel").fetchSemanticsNodes().isEmpty() }
         waitText("可恢复的主题")
     }
@@ -1057,7 +1057,7 @@ class UiFlowTest {
         click("新课次")
 
         // Open reference picker when no notes exist
-        compose.onNodeWithTag("pick-reference").performClick()
+        clickTag("pick-reference")
         compose.onNodeWithTag("reference-empty-hint").assertExists()
         click("取消")
 
@@ -1069,7 +1069,7 @@ class UiFlowTest {
         awaitAnswer("笔记正文")
 
         // Open reference picker again: hint must not exist because notes exist
-        compose.onNodeWithTag("pick-reference").performClick()
+        clickTag("pick-reference")
         assertTrue(compose.onAllNodesWithTag("reference-empty-hint").fetchSemanticsNodes().isEmpty())
         click("取消")
     }
@@ -1080,14 +1080,14 @@ class UiFlowTest {
         click("新课次")
 
         // Click lesson title to open RenameLessonDialog
-        compose.onNodeWithTag("lesson-title").performClick()
+        clickTag("lesson-title")
         compose.onNodeWithTag("rename-input").assertExists()
         compose.onNodeWithTag("suggest-title").assertExists()
 
         // Manual rename
         compose.onNodeWithTag("rename-input").performTextClearance()
         compose.onNodeWithTag("rename-input").performTextInput("微积分基础讲义")
-        compose.onNodeWithTag("rename-confirm").performClick()
+        clickTag("rename-confirm")
         waitText("微积分基础讲义")
 
         // Ask question so excerpt can be formed
@@ -1096,19 +1096,19 @@ class UiFlowTest {
 
         // Open rename dialog and suggest topic
         mathReply = "极限与连续"
-        compose.onNodeWithTag("lesson-title").performClick()
-        compose.onNodeWithTag("suggest-title").performClick()
+        clickTag("lesson-title")
+        clickTag("suggest-title")
         // Wait for suggestion to populate input
         compose.waitUntil(10_000) {
             compose.onAllNodes(hasText("极限与连续", substring = true)).fetchSemanticsNodes().isNotEmpty()
         }
         click("取消")
-        compose.onNodeWithTag("lesson-title").performClick()
+        clickTag("lesson-title")
         compose.onNodeWithTag("rename-input").assert(hasText("微积分基础讲义"))
         mathReply = "微分与极限"
-        compose.onNodeWithTag("suggest-title").performClick()
+        clickTag("suggest-title")
         compose.waitUntil(10000) { compose.onAllNodes(hasText("微分与极限", substring = true)).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("rename-confirm").performClick()
+        clickTag("rename-confirm")
         compose.waitUntil(10000) {
             runBlocking { app.store.listLessons(app.store.listNotebooks().single().id).single().title.endsWith("微分与极限") }
         }
@@ -1121,7 +1121,7 @@ class UiFlowTest {
     @Test fun scratchpadSurvivesRotationAndSendIncludesLatestSnapshot() {
         createNotebook("新建课程", "随堂记录课")
         click("随堂记录课"); click("新课次")
-        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        clickTag("toggle-scratchpad")
         compose.onNodeWithTag("scratchpad-input").performTextInput("老师刚说的完整条件")
         hideKeyboard()
         scenario!!.recreate()
@@ -1131,7 +1131,7 @@ class UiFlowTest {
         compose.onNodeWithTag("scratchpad-input").assert(hasText("老师刚说的完整条件"))
         screenshot("scratchpad-phone")
         compose.onNodeWithTag("attach-scratchpad").assertIsOn()
-        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        clickTag("toggle-scratchpad")
         ask("这一步为何成立")
         awaitAnswer("答案1")
         assertTrue(inputs.single().messages.last().text.contains("老师刚说的完整条件"))
@@ -1148,18 +1148,18 @@ class UiFlowTest {
         compose.onNodeWithTag("notebook-name").performTextInput("Calculus")
         click("Confirm")
         click("Calculus"); click("Handbook")
-        compose.onNodeWithTag("edit-document").performClick()
+        clickTag("edit-document")
         compose.onNodeWithTag("document-input").performTextInput("# Limits\n\nAssume continuity before taking a limit.")
         hideKeyboard()
-        compose.onNodeWithTag("save-document").performClick()
+        clickTag("save-document")
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("document-reader").fetchSemanticsNodes().isNotEmpty() }
         systemBack(); click("New session")
-        compose.onNodeWithTag("pick-reference").performClick()
+        clickTag("pick-reference")
         compose.onNodeWithTag("reference-empty-hint").assert(hasText("Summarize", substring = true))
         click("Cancel")
-        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        clickTag("toggle-scratchpad")
         compose.onNodeWithTag("scratchpad-input").performTextInput("Assume x < 3")
-        compose.onNodeWithTag("toggle-scratchpad").performClick()
+        clickTag("toggle-scratchpad")
         ask("Explain limits")
         awaitAnswer("答案1")
         assertTrue(inputs.single().systemText.startsWith(com.feiyu.notes.study.PromptKind.STUDY.default("en")))
@@ -1170,10 +1170,10 @@ class UiFlowTest {
         compose.onAllNodesWithText("Template: Guided explanation (default)")[0].assertExists()
         screenshot("course-features-en")
         mathReply = "Limits and Continuity"
-        compose.onNodeWithTag("lesson-title").performClick()
-        compose.onNodeWithTag("suggest-title").performClick()
+        clickTag("lesson-title")
+        clickTag("suggest-title")
         waitSubstring("Limits and Continuity")
-        compose.onNodeWithTag("rename-confirm").performClick()
+        clickTag("rename-confirm")
         waitSubstring("Limits and Continuity")
         assertTrue(inputs.last().systemText.contains("2 to 6 words"))
         mathReply = "Q: Which assumption is needed?\nA: Continuity."
@@ -1202,12 +1202,12 @@ class UiFlowTest {
     @Test fun handbookEditingOutlineBookmarkAndQuestionRetrievalFlow() {
         createNotebook("新建课程", "手册测试课")
         click("手册测试课"); click("课程手册")
-        compose.onNodeWithTag("edit-document").performClick()
+        clickTag("edit-document")
         compose.onNodeWithTag("document-input").performTextInput("# 极限\n\n前提：连续函数。**完整条件**与公式 $$ x^2 $$\n\n# 导数\n\n导数定义")
         hideKeyboard()
         scenario!!.recreate()
         compose.onNodeWithTag("document-input").assert(hasText("完整条件", substring = true))
-        compose.onNodeWithTag("save-document").performClick()
+        clickTag("save-document")
         compose.waitUntil(15000) { compose.onAllNodesWithTag("document-reader").fetchSemanticsNodes().isNotEmpty() }
         screenshot("course-handbook")
         shell("wm size 1080x2300")
@@ -1274,7 +1274,7 @@ class UiFlowTest {
     private fun ask(text: String) {
         android.util.Log.i("UiFlowTest", "ask: typing '$text' and clicking send")
         typeDraft(text)
-        compose.onNodeWithTag("send").performClick()
+        clickTag("send")
         hideKeyboard()
     }
 
@@ -1287,6 +1287,13 @@ class UiFlowTest {
     private fun click(text: String) {
         waitText(text)
         compose.onAllNodes(hasText(text) or hasContentDescription(text))[0].performClick()
+        compose.waitForIdle()
+    }
+
+    /** Tagged controls compose after navigation settles; wait for the node like click() does. */
+    private fun clickTag(tag: String) {
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag(tag).performClick()
         compose.waitForIdle()
     }
 
