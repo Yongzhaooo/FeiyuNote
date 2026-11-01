@@ -52,7 +52,7 @@ git log -1 --oneline
 
 ### 3.1 当前 fork、权限和自动化
 
-- 开发仓库为 `https://github.com/XePWang/FeiyuNote`；原项目 `https://github.com/Yongzhaooo/FeiyuNote` 为 upstream。origin 预期指向用户 fork，但先检查，不能为符合命名默默覆盖已有 remote。fork 内任务不用等待上游 Issue 批准；回馈原项目才按其贡献流程执行。
+- 主仓库为 `https://github.com/Yongzhaooo/FeiyuNote`，协作者 fork 为 `https://github.com/XePWang/FeiyuNote`。先用 `git remote -v` 确认 origin 指向哪一个，不为符合命名覆盖已有 remote。fork 内任务不用等待主仓库 Issue 批准；回馈主仓库按其贡献流程执行。
 - 用户已说明有 Git 写权限。GitHub 账号权限、容器内认证和本次操作授权是不同条件；不反复询问已授权操作，也不把“有权限”当作允许推送 main、发消息、合并或发布。授权推送后显式核对目标仓库和分支，不默认推送所有分支或标签。
 - 容器登录密钥 id_ed25519_docker_dev 不是默认 GitHub 密钥。使用用户已有 Git 凭据机制，不复制宿主私钥、不输出 token，不用试推送探测权限。
 - 根据任务单完成本地分支和提交；每个提交保持可验证，最终列出 commit SHA。交接时未完成改动保留并说明，不为“干净工作区”删除内容。
